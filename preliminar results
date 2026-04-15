@@ -1,0 +1,79 @@
+\section*{Preliminary Results}
+
+Antes de implementar el conjunto completo de diagnósticos y calibración en GCAM-Europa, se ha elaborado unos primeros análisis utilizando el marco global GCAM-core pues es el modelo general del que parte gcam-europe. Los cambios en datos y código que habría que hacer en este último para ejecutarlo hasta 2010 hay que aplicarlos primero a gcam-core y después a su extensión en Europa.
+Si bien, se elabora un diagnóstico de error para Gcam-core, la idea es construir el indicador multidimensional de la ecuación \ref{eq:indicador_error_multi}, los respectivos ensembles del análisis de sensibilidad y la calibración bayesiana exclusivamente opara Gcam-europe. No obstante, aún podemos extraer algunas reflexiones de los resultados obtenidos del hindcasting sobre gcam-core Siguiendo con la metodología propuesta, se ha implantado la parte correspondiente al entendiemiento y diagnóstico del error. 
+
+Un primer diagnóstico es elaborar la diferencia en terminos absolutos de todos los valores observados tanto para 2015 como para 2021 con sus respectivos valores estimados para, a nivel general, poder ver cómo están distribuidos. Estos son del orden de 23614096, excluyendo algunos casos excepcionales. 
+
+Para poder representar mejor la diferencia entre valor observado y estimado se utiliza la escala logarítmica. 
+La gráfica de la distribución es la siguiente.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{absoluteError1.jpg}
+    \label{fig:absolute_error}
+\end{figure}
+
+Es importante recalcar que el eje abcisas no da información con respecto al sesgo, ya que por un lado son errores absolutos y por otro, está en escala logarítmica. La curva representada nos daría información sobre cómo se distribuyen y, como tal, se observa que existen errores muy grandes en algunas variables que generan la cola tan larga en la gráfica. 
+Se observa que estos errores se ubican en la parte izquierda del eje central en cero mientras que la gran mayoría se condensan alrededor de cero. 
+Para poder analizar con mayor facilidad aquellos que más cercanos a cero, se procede a truncar la cola de la gráfica:
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{absoluteError2.jpg}
+    \label{fig:absolute_error}
+\end{figure}
+
+ En esta segunda gráfica vemos la ditribución de la magnitud de los errores parece tener una naturaleza bimodal, destacando aquellos que se ubican alrededor de cero. 
+La distribución de la magnitud global de los errores nos da una idea general de la predicción que hace GCAM. Sin embargo, estas gráficas sólo hacen referencia al primer punto, no al sesgo del error. 
+
+Para ello, se elabora una segunda gráfica para entender si estos errores están sobrestimados o infraestimados. Para ello se elabora la misma diferencia anterior, observacion menos estimacion, pero sin el térmno abosluto:
+
+\begin{table}[H]
+\centering
+\caption{Bias summary statistics}
+\label{tab:bias_summary}
+\begin{tabular}{lrrrrrr}
+\toprule
+Bias & N & \% & Mean & SD & Min & Max \\
+\midrule
+Negative & 3,878,290 & 25.85 & -1.03e6 & 1.31e9 & -2.46e12 & 0 \\
+Zero     & 6,685,884 & 44.56 & 0 & 0 & 0 & 0 \\
+Positive & 4,441,001 & 29.60 & 8.27e5 & 2.41e7 & 0 & 1.65e10 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Como se observa, la mayoría de los errores se concentran en torno a cero (44\%), mientras que más de un 25\% corresponden a subestimaciones y cerca de un 30\% a sobrestimaciones. En conjunto, esto indica que los errores están relativamente equilibrados, aunque con una ligera tendencia a la sobreestimación. Además, observamos que los errores que subestiman tienen mayor magnitud y mayor varianza.
+
+Otro punto revelador para entender si GCAM-core estima correctamente es determinar el indicador de correlación entre serie temporal estimada y observada. PAra ello se dispone del índice de correlación de Spearman tal como se ha argumentado en el capítulo de metodología. 
+
+Para ello se dispone de la siguiente gráfica
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{density_corr_all.jpg}
+    \label{fig:absolute_error}
+\end{figure}
+Lo que se puede determinar es que la mayor parte de las series temporales se ubican cerca de 1, denotando que tanto las predicciones como el histórico en muchos casos crecen o decrecen a la vez. No obstante, se observa una gran cola de valores que no sólo pueden tener una relación espuria (menor que 0.1) sino que incluso tienen un comportamiento contrario al que tendrían que tener.
+Para poder entender mejor este fenómeno, se elabora otra curva, filtrando series con correlación baja y espuria (menor o igual 0.1).
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{density_corr_low.jpg}
+    \label{fig:absolute_error}
+\end{figure}
+
+Lo que se puede observar aquí es un comportamiento bimodal, existe un conjunto de series temporales alrededor de cero y otro conjunto de series temporales alrededor de -0.5 Esto denota...
+
+Finalmente se elabora un estudio preliminar del comportamiento de los índices de error MAE y RMSE en las diferentes regiones de GCAM. SE ha filtrado cada error de cada variable y se ha agrupado para región. Hecho eso se han calculado los respectivos índices de error. 
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{bars_MAE_dir_error_region.jpg}
+    \label{fig:absolute_error}
+\end{figure}
+
+Un interesante primer ersultado muestra la heterogeneidad que hay entre regiones con respecto al error, evidenciando que las cuatro regiones que más acumulan error son USA, SOuth Africa, Middle EAst y EU-15. Además también se observa que no siempre el error tiene la misma dirección para cada región. Por ejemeplo mientras las mencionadas regiones tienen un sesgo negativo, subestimando el resultado, en regiones como Japan o Colombia predomina un error con sesgo positivo, sobrestimando los resultados
+

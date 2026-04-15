@@ -1,0 +1,73 @@
+Cambio en vez de a 2015 como año base a 2010 (o 2005) en constants.
+
+Error en el chunk module_energy_L113.atb_cost (línea 335) relacionado con la función gather_years: el problema surge porque el data frame contiene una columna llamada final-calibration-year que gather_years interpreta como el año 2010. Esto provoca un fallo en la línea 91 de zgcamusa_L120.offshore_wind_reeds, donde se calcula OM_fixed. Esa variable es clave para el cálculo posterior de precios y, al estar incompleta o contener datos faltantes para el año 2010, genera valores NaN. La causa raíz parece estar en el objeto padre, L113.globaltech_OMfixed_ATB, generado en module_energy_L113.atb_cost. Por eso, he desarrollado una función para generalizar y corregir el manejo del año base dentro de este chunk, asegurando que la columna final-calibration-year no interfiera con el proceso. El problema se aborda con la función baseYear_remove_cols_lastCalibration, que busca evitar conflictos causados por columnas de años que interfieren con el procesamiento, en particular la columna final-calibration-year que se interpreta como un año (por ejemplo, 2010). 
+Además ocurre otro problema en la línea 576 (o 596 tras hacer el cambio en el párrafo anterior) que se arrastra a otros chunks:
+El problema viene de que al cambiar el año base (energy.ATB_LATEST_YEAR) a valores más antiguos, aparecen muchos valores NA en los datos previos, lo que genera huecos y errores. La versión original usa interpolación hasta el año base, pero si no hay datos completos, deja NA que pueden causar fallos. Ahora hace algo parecido pero eliminando los años que no son model years
+
+
+module_gcamusa_L132.water_demand_industry línea 51 no mergean bien porque los datos en uno llegan a 2015 y en el otro hasta el base year que en este caso es 2010. Sencillamente hago un filtro para que se quede solo en los años que dice HISTORICAL_YEARS
+
+Error en module_energy_L223.electricity: Mismo error con la function gather_years del chunk module_energy_L113.atb_cost
+
+Error en module_aglu_L100.regional_ag_an_for_prices linea 150.Al cambiar el año base de 2015 a 2010, algunos territorios como Sudán no cuentan con datos completos en L100.FAO_GDP_Deflators para los años anteriores a 2012. Esto genera que al hacer el merge con L100.FAO_ag_an_ProducerPrice_1 usando left_join_error_no_match(), las columnas que dependen del deflactor (como currentUSD_per_baseyearUSD) queden con valores NA o NaN, porque no existe un valor válido para esos años y territorios. Antes, con base year 2015, estos datos estaban presentes, por lo que el problema no aparecía. Para solucionarlo, he creado una función que rellena esos NA con el valor más cercano disponible, ya sea hacia adelante o hacia atrás en la serie temporal, realizando así una interpolación basada en el dato más próximo. De esta forma, se evitan valores perdidos que obstaculizan la ejecución y se mantiene la coherencia temporal de los deflactores para todos los territorios, incluso aquellos con datos incompletos en ciertos años.###################
+
+Error en module_energy_L225.hydrogen: Mismo error con la function gather_years del chunk module_energy_L113.atb_cost
+
+Error en    linea 172 left_join_no_match ya que L144.pop_sR9 tenía los años historicos (menor que base year) mientras que L144.flsp_bm2_sR4 tenía años de 2012. Cuando se construye L144.flsp_bm2_sR4 filtro antes por años históricos en línea 158
+
+Error en module_energy_L254.transportation_UCD: Mismo error con la function gather_years del chunk module_energy_L113.atb_cost
+
+Error module_energy_L244.building_det un problema con income_shares ya que vemos que los escenarios SSP solo tienen datos desde 2020. Para corregirlo, en el propio chunk, el primer objeto que se construye a través de income_shraes: L144.income_shares utilizo historical data para completar los escenarios SSP de los años faltantes. Al cambiar el año base del modelo a uno anterior al primer año disponible en los escenarios SSP (por ejemplo, establecerlo en 2005 cuando los SSP comienzan en 2020), se genera un vacío de datos para esos años intermedios, lo que puede provocar inconsistencias o errores en el modelado. Para solucionar esto, he identificado el último año histórico antes del primer año SSP y hemos creado una secuencia de años en pasos de cinco desde el nuevo año base hasta ese último año histórico. Luego, para cada escenario SSP, completamos esos años intermedios con los datos históricos correspondientes, o en su defecto con los datos del año histórico más cercano, garantizando así una cobertura temporal continua y adecuada para el modelo, evitando huecos que afecten la simulación.
+
+Error en module_gcamusa_L1236.elec_load_segments_solver hay un conjunto de booleanos que calibran y calculan cosas para cada gcamusa.LOAD_SEG_CAL_YEARS  <- c(2015,2010, 2005, 1990). Lo que ocurre es que cuando el Base year es menor que el item máximo de gcamusa.LOAD_SEG_CAL_YEARS, como por ejemplo si tenemos base year = 2010, entonces elementos mayores se calculan con NAs ya que los datos se han recortado previamente para tener como máximo obversaciones de dicho año base. En este ejemplo, un baes year 2010 hace que datos de 2015 queden con NaNs. Por tanto cambio en constants para que si Base year esta dentro de gcamusa.LOAD_SEG_CAL_YEARS <- c(2015,2010, 2005, 1990) , elimine aquellos años de dicho vector gcamusa.LOAD_SEG_CAL_YEARS que sean estrictamente mayores.
+
+Error en module_gcamusa_L2234.elec_segments: Mismo error con la function gather_years del chunk module_energy_L113.atb_cost
+
+Error en module_gcamusa_L2247.elecS_tech_costs, en A23.itc_elecS_USA en donde no hay datos para 2015 y salen NaNs al hacer left_join que a su vez viene de A23.itc_USA que tiene NaN en 2015 también. PArece que gcam-usa/A23.itc_USA no tiene años en 2015 ==> Podemos interpolar a años previos en base a los datos de 2020. De esta forma, los datos menores 2020 (que corresponden al primer año de modelización cuando base year es 2015) son 0.
+
+Error en  module_water_L2233.electricity_water: Mismo error con la function gather_years del chunk module_energy_L113.atb_cost
+
+
+Error en module_gcamusa_L271.nonghg_trn en linea 189 porque hay NaNs enm la columna output de L254.StubTranTechOutput_USA. Esto es porque L254.StubTranTechCoef_USA tiene coeficientes de 0 mientras que Tambien L254.StubTranTechCalInput_USA tiene calibrated.value a 0 y al hacer la division  salen NaNs. En module_gcamusa_L254.transportation elimino 	
+
+
+
+Posibles puntos de fricción:
+
+module_energy_L113.atb_cost --> corregido 
+module_energy_L244.building_det lo de copiar datos hacia atrás no se si es bueno
+module_gcamusa_L2247.elecS_tech_costs ->gcam-usa/A23.itc_USA no tiene años en 2015  interpolar a años previos
+module_aglu_L100.regional_ag_an_for_prices
+
+module_aglu_L100.regional_ag_an_for_prices al ver que interpolo cambiando algunos a´ños NaNs creo que por eso se me descuageringa GCAM. Por eso, utilizo 
+otros aglu.MODEL_PRICE_YEARS ya que los que habia puesto inicialmente generan NaNs. Al final aglu.MODEL_PRICE_YEARS solo sirve para eliminar flujos nominales.Cambio constants entonces aglu.MODEL_PRICE_YEARS <- 2016, 2017, 2018 (version gcam2015). Además en linea 79, a la hora de calcular gdp deflators, antes utilizaba aglu.DEFLATOR_BASE_YEAR, lo que ocurre es que en algunas regiones, 2010 no tiene datos, lo que hace que genere NaNs y no cuadre con otras tablas. Como aglu.DEFLATOR_BASE_YEAR solo aparece en ese chunk y solo vale para eliminar el componente nominal del gdp (al ser un deflactor), lo dejo constante a 2015 en constants. Mucho mejor esto que echar para atrás los datos en region en donde hay años sin datos (ya que esas regiones no existían). Eso entonces rompe la dinámica de las regiones.
+
+Error en module_aglu_L107.an_IMAGE_R_C_Sys_Fd_Y en L100.IMAGE_an_watercontent_ctry_C con value y commodity lleno de NaNs. Miro en module_aglu_L100.IMAGE_downscale_ctry_yr. He cambiado dentro del propio  aglu.MODEL_MeatWaterContent_YEARS de manera que no sea igual a aglu.MODEL_PRICE_YEARS ya que no mergea bien sino que sea igual a  c(MODEL_BASE_YEAR - 2, MODEL_BASE_YEAR - 1,MODEL_BASE_YEAR)
+
+GCAM sigue sin funcionar. Pruebo a coger constants.R de 2015 y solo cambiar a 2010 (antes habia hecho otros cambios por el script).
+
+Error en module_socio_L103.NationalAccounts
+
+ERror en module_aglu_L107.an_IMAGE_R_C_Sys_Fd_Y porque L100.IMAGE_an_watercontent_ctry_C tiene value  = NaN
+
+
+ERror en module_gcamusa_L1236.elec_load_segments_solver, esto es por el cambio en gcamusa.LOAD_SEG_CAL_YEARS, el cual tiene dentro el propio año base. Lo que hago es en cosntants:
+gcamusa.LOAD_SEG_CAL_YEARS <- c(2015,2010, 2005, 1990)       # Years for which electricity load segments are calibrated
+if (MODEL_FINAL_BASE_YEAR %in% gcamusa.LOAD_SEG_CAL_YEARS){
+  gcamusa.LOAD_SEG_CAL_YEARS <- gcamusa.LOAD_SEG_CAL_YEARS[gcamusa.LOAD_SEG_CAL_YEARS <= MODEL_FINAL_BASE_YEAR]
+}
+
+Error module_water_L173.EFW_manufacturing porque L132.water_km3_ctry_ind_Yh tiene datos hasta 2021 y porque dentro de chunk zwater L132, L101.en_bal_EJ_ctry_Si_Fi_Yh_full tiene datos de 2021, vamos a zenergy_L101.en_bal
+
+
+Descubor que el data frame final L2323.StubTechCost_iron_steel esta lleno de NaNs que pueden fastidiar GCAM. Este se genera en module_energy_L2323.iron_steel. Vemos que todo viene de que el csv inicial llamado TZ_steel_production_costs no tiene datos para antes de 2015, lo cual provoca NaNs y siendo que solo aparece en un o de los ultimos chunks, este error se traspasa a los XML
+
+Nas Tambien en:
+ "L241.hfc_future"            "L223.StubTechFixOut_hydro"  "L2233.StubTechFixOut_hydro"
+
+L241.hfc_future, en 	
+zemissions_xml_all_fgas_emissions.R, hay Nas porque en 2015 no habia algunos datos por lo que interpolo con el valor más cercano. Los Nas se producen en el proppio chunk zemissions_L241.fgas.R en una interpolación en donde no cuenta con años de 2015-
+
+L223.StubTechFixOut_hydro en module_energy_L223.electricity tiene NAs en todos los años 2015. Mas de lo mismo, se interpola primero y luego se filtra por MODEL_FUTURE_YEARS, como dentro de MODEL_FUTURE_YEARS esta 2015, se incluyen años con NA Ç(los de 2015). Interpolamos para que copie el año 2021 en 2015 (es basicamente lo que hacía pero el codiugo dejaba fuera los 2015)
+
+L2233.StubTechFixOut_hydro en module_water_L2233.electricity_water interpola y el año 2015 como no esta en el data frame quelo construye (L2233.StubTechProd_elec_cool) se queda con NA. (L2233.StubTechProd_elec_cool tiene años historicos por lo que no pasa nada que no haya 2015, sin embargo, este se junta con el data frame L223.StubTechFixOut_hydro que es de años futuros y sí que tiene un 2015 == Na. Este viene del chunk module_energy_L223.electricity pero viene bien. Para resolverlo, en module_water_L2233.electricity_water, al principio, si ese data frame lleva nas los relleno interpolando por el año más cercano con datos .

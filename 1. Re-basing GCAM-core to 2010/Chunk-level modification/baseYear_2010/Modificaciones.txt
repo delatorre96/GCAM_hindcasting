@@ -1,0 +1,68 @@
+Modificaciones:
+
+1.- Error gather_years. 
+
+El problema surge porque la función gather_years interpreta la columna final-calibration-year como el último año histórico. En nuestro caso: 2010. Esto hace que la función no sepa qué columna 2010 coger, si la que viene de final-calibration-year o la histórica 2010. Esto no pasaba con 2015 ya que no había columnas con 2015 y final-calibration-year por lo que final-calibration-year pasaba a ser 2015. (como a veces se usa gather years para data frames que no tienen esta columna, pongo un if para que mis modificaciones sólo afecten a lo df en donde sí)
+Chunks en donde tiene su reflejo:
+
+	module_energy_L113.atb_cost 
+	module_energy_L225.hydrogen
+	module_energy_L223.electricity
+	module_energy_L254.transportation_UCD
+	module_gcamusa_L2234.elec_segments
+	module_water_L2233.electricity_water
+
+2.- Error sobre datos históricos no disponibles/faltantes/… en el año base
+
+	module_energy_L113.atb_cost -> En este chunk, los inputs de energía atb sólo partían desde 2015 y, en GCAM2021, se reajustaba hacia atrás. Este chunk primero interpola hacia atrás y luego filtra por los años históricos. Si el año base es 2015 lo recortaba después y no había problema. Sin embargo cuando el año base es 2010 hacía que se quedara sin datos. Por tanto, vuelvo a modificar la función gather_years para que ante la casuística de este chunk, no use como año base 2010 sino que utilice 2021 para luego recortar los outputs del chunk en 2010. 
+
+	module_energy_L244.building_det -> Este chunk tenía un problema con su input income_shares ya que cuando carga "historical years" llega hasta 2015 y a partir del año 2015 comienzan datos de escenarios SSP. Sencillamente cambio income_shares para que "historical years" llegue hasta 2010 y copio los historical years de 2015 para cada escenario SSP. Esto hace que para cada SSP los datos en 2015 sean idénticos (al ser historical years)
+
+	module_emissions_L241.fgas  -> Este chunk tiene un data frame con algunos años faltantes históricos. Como esto también ocurría cuango gcam usaba como año base 2021, en el código original utilizan la function approx_fun para interpolar cuando existen dos puntos (y así interpolar linealmente). Sin embargo por cuando había un sólo año en los datos, approx_fun no funciona correctamente. Esto viene porque como hemos eliminado años históricos, la interpolación lineal no puede hacerse al faltar puntos (por ejemplo 2015 y 2021). Entonces lo que hago es copiar en los años faltantes el último dato conocido.
+
+	module_energy_L2323.iron_steel -> El objeto  TZ_steel_production_costs no tiene datos en 2010. Por tanto copio los datos del año 2015 para el año 2010
+
+
+	module_gcamusa_L2247.elecS_tech_costs 
+
+3.- Errores de año 2020 -> 2021
+
+En algunos chunks existían problemas con mergear el año futuro 2021. Como en la versión de 2021, este año es histórico, no había problemas pero como en base years anteriores este año es futuro entonces a veces causa problemas. Esto se resuelve cambiando columnas de 2020 con 2021. Chunks en donde se hace esto:
+
+	module_energy_L244.building_det
+	module_emissions_L152.MACC
+	module_emissions_L241.fgas 
+
+
+4 .- Filtro de años históricos: 
+
+Cuando los chunks cargan datos que van más allá del año base y los tratan como años históricos, generando un error en left_join_no_match. Esto se resuelve filtrando previamente las filas que <= 2010
+
+	module_aglu_L100.0_LDS_preprocessing
+	module_energy_L101.en_bal_IEA 
+	module_gcamusa_L132.water_demand_industry 
+	module_gcamusa_L144.Commercial 
+	module_socio_L102.GDP
+
+5.- Errores de constants
+
+	module_aglu_L100.IMAGE_downscale_ctry_yr-> Este chunk en un momento dado hace un filtro definiendo aglu.MODEL_MeatWaterContent_YEARS como igual a aglu.MODEL_PRICE_YEARS, el cual esta definido en constants como 2014:2016. Además es el único chunk que uiliza aglu.MODEL_PRICE_YEARS. Lo cambio para que aglu.MODEL_PRICE_YEARS sea igual a c(MODEL_FINAL_BASE_YEAR - 2, MODEL_FINAL_BASE_YEAR - 1,MODEL_FINAL_BASE_YEAR). De esta forma usa todos los años del data frame
+
+6.- Errores en NAs en XML
+
+	module_energy_L223.electricity -> hacia un approx_fun con rule = 1, interpolando linealmente, pero cuando faltan datos como para hacer lineal, entonces lo deja como NA, por eso cambio a rule = 2 para que deje el dato al último conocido.
+
+	module_water_L2233.electricity_water -> El objeto L223_data$StubTechFixOut_hydro no tenía años en el primer año futuro (2015) porque faltanban años para interpolar linealmente, copio el año 2021 en 2015
+
+7.- Error de hard coding
+	module_socio_L101.Population: Hace un filtro en un momento dado de   year = c(2020:max(FUTURE_YEARS))) y filter(year %in% c(2020:max(FUTURE_YEARS))). Reemplazo 2020 por (MODEL_FINAL_BASE_YEAR -1)
+
+8.- Problemas de solver:
+
+	module_aglu_L203.ag_an_demand_input: 
+	valores 0 en ag_an incoherentes, linea 123. Al usar 2010, a veces había cantidad consumida pero no había calorías. Esta casuística no se contemplaba en la versión estandar. En ese caso se hace como cuando no hay cantidad y sí calorías: usar el valor agregado del mundo para la región dada.
+	mutate(value = if_else(value == 0, 0.0001, value)) ?? PROBAMOS
+
+	module_aglu_L100.FAO_SUA_connection Se prueba a ejecutar el chunk para años hasta 2021 y luego se filtran los años hasta 2010 pero se restaura  input/gcamdata/R/zaglu_L203.ag_an_demand_input.R
+
+	Siempre son los mismos periodos los que nos e resuelven

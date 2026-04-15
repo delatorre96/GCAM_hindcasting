@@ -1,0 +1,27 @@
+Error gather_years:
+
+module_energy_L113.atb_cost 
+module_energy_L225.hydrogen
+module_energy_L223.electricity
+module_energy_L254.transportation_UCD
+module_gcamusa_L2234.elec_segments
+module_water_L2233.electricity_water
+
+Error sobre datos históricos no disponibles/faltantes/… en el año base 
+module_energy_L113.atb_cost 
+module_aglu_L100.regional_ag_an_for_prices
+module_energy_L244.building_det
+module_gcamusa_L2247.elecS_tech_costs
+
+
+Filtro de años históricos
+module_gcamusa_L132.water_demand_industry 
+module_socio_L103.NationalAccounts
+module_gcamusa_L144.Commercial
+
+Errores que se corrigen cambiando constants
+module_gcamusa_L1236.elec_load_segments_solver -> gcamusa.LOAD_SEG_CAL_YEARS
+module_aglu_L107.an_IMAGE_R_C_Sys_Fd_Y -> aglu.MODEL_MeatWaterContent_YEARS (error en zaglu_L100.IMAGE_downscale_ctry_yr.R)
+
+Error numérico 
+module_gcamusa_L271.nonghg_trn (module_gcamusa_L254.transportation)

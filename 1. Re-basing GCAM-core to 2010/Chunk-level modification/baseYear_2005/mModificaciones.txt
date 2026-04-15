@@ -1,0 +1,18 @@
+Error en module_socio_L100.NationalAccounts en linea 404 en donde hace una comproboacion:
+    assertthat::assert_that(Capital_Compensation_Share_R_Yh %>% filter(year == Socioeconomic.PWT.LastYear) %>%
+                              filter(var == "capital.share.pwt") %>% pull(value) %>% max < 0.7, msg = "check max value in data")
+Al usar 2005 como ultimo año solo hay un registro que se pasa de 0.7 (a 0.71) por lo que cambio el umbral a 0.75
+
+Error module_aglu_L100.FAO_SUA_connection: FAO_Food_Macronutrient_All no tiene datos de 2005 a 2010 por lo que imputo haia atrás
+
+Error en module_aglu_L162.ag_prodchange_R_C_Y_GLU_irr en linea 196 al hacer un join entre dos data frames. El problema venia de L162.ag_Yieldmult_Rcrs_Ccrs_Y_irr que, al hacer  un join la variable mult se convertia en infs o en NaNs. Tras muuucha búsqueda, me doy cuenta de que en los años históricos de FAO_ag_CROSIT(data frame padre de  L162.ag_Yieldmult_Rcrs_Ccrs_Y_irr) existen ceros en 2005. Para calcular mult, se divide el dato del año entre el dato del primer año. EL propio código eliminaba los NaNs cuando el año base era 0, esto tenía efecto y se hacia NaN porque cuando el año base era 0 todos los demás lo eran (y siempre se dividia 0/0) pero cuando solo era 0 el primer año (2005) y los demás años sí tenían datos, el dato no se hacía NaN sino inf. Modifico el código para que siempre que el año base sea 0 se sustituya por NaN.
+ 
+
+Error en module_water_L173.EFW_manufacturing en linea 143 al hacer una regresión y no encontrar datos. Esto era porque los datos que usan para ahcer la regresión son siempre de 2010:     L173.trtshr_2010 <- Liu_EFW_inventory[c("iso", "trtshr")] %>%
+      mutate(year = 2010) %>%
+      inner_join(L102.pcgdp_thous90USD_ctry_Yh, by = c("iso", "year")) 
+En vez de usar 2010 como hard-coding decimosque si base year es menor que 2010, use base year
+
+Error en module_aglu_L123.LC_R_MgdPastFor_Yh_GLU Error en left_join_error_no_match entre     L123.LC_bm2_R_Past_Y_GLU y L121.Yield_kgm2_R_Past_GLU ya que L121.Yield_kgm2_R_Past_GLU aparece vacío. Vemos que en el chunk de L121, L120.LC_soil_veg_carbon_GLU también esta vacio y es el que construye a  L121.Yield_kgm2_R_Past_GLU. Parece que el problema esta en que MODEL_CARBON_YEAR = 2010. MODEL_CARBON_YEAR se usa para calibrar todo y filtrar varios data frames. Lo cambio por 2005 si base year es menor que 2010	
+
+Error en module_aglu_L100.regional_ag_an_for_prices en linea 126. Se hace un filtro de años (para 2005) pero el data frame inicial, GCAMFAOSTAT_ProdPrice,  no tiene años menores de 2010 y cuando filtra por aglu.MODEL_PRICE_YEARS, siendo que aglu.MODEL_PRICE_YEARS es 2004,2005,2006 entonces nos quedamos sin datos
