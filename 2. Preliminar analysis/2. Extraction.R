@@ -15,7 +15,7 @@ queries <- listQueries(prj1)
 variables <- c()
 
 for (query in queries) {
-  df <- getQuery(prj1, query)
+    df <- getQuery(prj1, query)
 
   cols <- colnames(df)
   cols <- cols[!cols %in% c("scenario", "value", "Units", "year")]
@@ -128,5 +128,5 @@ for (query in queries) {
 
 df_final <- dplyr::bind_rows(result_list)
 
-write.csv(query_errors_all,"Data/errors_indicators.csv", row.names = FALSE)
+write.csv(df_final,"Data/errors_indicators.csv", row.names = FALSE)
 
