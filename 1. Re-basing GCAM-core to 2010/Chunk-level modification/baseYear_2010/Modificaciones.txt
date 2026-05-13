@@ -57,7 +57,13 @@ Cuando los chunks cargan datos que van más allá del año base y los tratan com
 7.- Error de hard coding
 	module_socio_L101.Population: Hace un filtro en un momento dado de   year = c(2020:max(FUTURE_YEARS))) y filter(year %in% c(2020:max(FUTURE_YEARS))). Reemplazo 2020 por (MODEL_FINAL_BASE_YEAR -1)
 
-8.- Problemas de solver:
+
+8. Datos de calibración con cero: sustituir por nunmero muy pequeño:
+        zaglu_L203.ag_an_demand_input.R
+        zemissions_L241.en_newtech_nonco2.R
+
+
+9.- Problemas de solver:
 
 	module_aglu_L203.ag_an_demand_input: 
 	valores 0 en ag_an incoherentes, linea 123. Al usar 2010, a veces había cantidad consumida pero no había calorías. Esta casuística no se contemplaba en la versión estandar. En ese caso se hace como cuando no hay cantidad y sí calorías: usar el valor agregado del mundo para la región dada.
