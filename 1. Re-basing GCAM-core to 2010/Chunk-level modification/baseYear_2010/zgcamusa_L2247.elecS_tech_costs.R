@@ -142,7 +142,33 @@ module_gcamusa_L2247.elecS_tech_costs <- function(command, ...) {
       select(sector.name = Electric.sector, subsector.name = subsector, intermittent.technology = Electric.sector.intermittent.technology,
              year, minicam.non.energy.input, input.cost) ->
       L2247.GlobalIntTechCost_ptc_USA
+    fill_closest <- function(x, y) {
 
+      idx <- which(!is.na(y))
+
+      approx(
+        x = x[idx],
+        y = y[idx],
+        xout = x,
+        method = "constant",
+        f = 0.5,
+        rule = 2
+      )$y
+    }
+    L2247.GlobalIntTechCost_ptc_USA <-
+      L2247.GlobalIntTechCost_ptc_USA %>%
+      group_by(
+        sector.name,
+        subsector.name0,
+        subsector.name,
+        minicam.non.energy.input,
+        intermittent.technology
+      ) %>%
+      arrange(year, .by_group = TRUE) %>%
+      mutate(
+        input.cost = fill_closest(year, input.cost)
+      ) %>%
+      ungroup()
 
     ## To account for new nesting-subsector structure and to add cooling technologies, we must expand certain outputs
     add_cooling_techs <- function(data){

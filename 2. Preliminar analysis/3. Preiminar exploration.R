@@ -1,7 +1,15 @@
+library(dplyr)
+library(Metrics)
+library(ggplot2)
+library(tidyr)
+library(patchwork)
+
+
 ################ ERRORS ##################
+all_errors <- read.csv('Data/all_errors.csv')
 
-
-vars <- names(all_errors)[names(all_errors) %in% variables]
+key_names <- c("query","region","year","value_ref", "value_chY","error","abs_error","rel_error")
+vars <- setdiff(names(all_errors), key_names)
 df_long <- all_errors %>%
   pivot_longer(
     cols = all_of(vars),
@@ -138,6 +146,8 @@ ggsave("density_corr_low.jpg",
 
 ################ REGION ##################
 #### Qué region tiende a acumular más error y cómo es su naturaleza?
+region_metrics_all <- read.csv('Data/region_metrics_all.csv')
+
 
 region_plot_df <- region_metrics_all %>%
   group_by(region) %>% summarise(MAE = sum(MAE),
@@ -145,7 +155,7 @@ region_plot_df <- region_metrics_all %>%
                                  rel_MAE_RMSE = mean(rel_MAE_RMSE),
                                  rel_error = mean(rel_error),
                                  Min_spearman_corr = min(spearman_corr, na.rm = TRUE))  %>%
-  arrange(desc(MAE)) 
+  arrange(desc(MAE))
 
 ### Gráficos región
 
@@ -242,7 +252,7 @@ density_errors_top20Regions <- ggplot(all_errors_top,
   scale_x_log10() +
   theme_minimal()
 
-#### Corr per region  
+#### Corr per region
 
 corr_region_negCorr <- correlations_df %>%
   group_by(region) %>%
@@ -253,7 +263,7 @@ corr_region_negCorr <- correlations_df %>%
   mutate(
     porc_neg = count_negCorr / (count_negCorr + count_posCorr)
   ) %>%
-  arrange(desc(porc_neg)) 
+  arrange(desc(porc_neg))
 
 negCorr_per_region <- ggplot(
   corr_region_negCorr,
@@ -294,7 +304,7 @@ ggsave("negCorr_per_region.jpg",
 query_metrics_top20 <- query_metrics_all %>%
   filter(MAE > quantile(MAE, 0.80, na.rm = TRUE)) %>%
   arrange(desc(MAE)) %>%
-  slice_head(n = 10) %>% mutate(query = ifelse(query == 'international competition share-weights (Armington intl. taste)', 
+  slice_head(n = 10) %>% mutate(query = ifelse(query == 'international competition share-weights (Armington intl. taste)',
                                                'international competition share-weights', query))
 
 
@@ -345,7 +355,7 @@ ggplot(variable_error,
   labs(x = "Sector", y = "Mean Abs Error")
 
 ##traded beef
-all_errors_top_query_beef <- all_errors_top_query %>% 
+all_errors_top_query_beef <- all_errors_top_query %>%
   filter(sector == 'traded beef')
 
 region_error <- all_errors_top_query_beef %>%
@@ -364,7 +374,7 @@ ggplot(region_error,
 
 ### indian traded beef
 
-indianTRadedBeef <- all_errors_top_query %>% 
+indianTRadedBeef <- all_errors_top_query %>%
   filter(sector == 'traded beef' & subsector == 'India traded beef')
 df_long <- indianTRadedBeef %>%
   select(year, value_ref, value_chY) %>%
@@ -394,7 +404,7 @@ corr_query_negCorr <- correlations_df %>%
   mutate(
     porc_neg = count_negCorr / (count_negCorr + count_posCorr)
   )  %>%
-  arrange(desc(porc_neg)) 
+  arrange(desc(porc_neg))
 
 df_plot <- correlations_df %>%
   group_by(query) %>%
@@ -421,7 +431,7 @@ negCorr_per_query <- ggplot(df_plot, aes(x = reorder(query, porc_neg), y = porc_
 
 ##################### Indicador de error conjunto
 
-######## Normalización: Solo usamos lo normalizado si queremos combinar métricas ######## 
+######## Normalización: Solo usamos lo normalizado si queremos combinar métricas ########
 clean_numeric <- function(x) {
   x[!is.finite(x)] <- NA_real_
   x
@@ -431,9 +441,9 @@ normalize <- function(x) {
   x <- clean_numeric(x)
   m <- mean(x, na.rm = TRUE)
   s <- sd(x, na.rm = TRUE)
-  
+
   if (is.na(s) || s == 0) return(rep(0, length(x)))
-  
+
   (x - m) / s
 }
 normalize_df <- function(df){
@@ -454,7 +464,7 @@ query_metrics_norm <-normalize_df(query_metrics_all)
 
 
 
-########################## BORADOR ########################## 
+########################## BORADOR ##########################
 
 
 
@@ -464,14 +474,14 @@ query_metrics_norm <-normalize_df(query_metrics_all)
 #   scale_x_log10() +
 #   scale_y_log10() +
 #   theme_minimal()
-# 
+#
 # bars_MAE_by_region <- ggplot(region_plot_df, aes(x = reorder(region, MAE), y = MAE)) +
 #   geom_col() +
 #   coord_flip() +
 #   theme_minimal() +
 #   labs(x = "Region", y = "Total MAE", title = "Ranking de error por región")
 
-# 
+#
 # ggplot(region_plot_df, aes(x = MAE)) +
 #   geom_density(fill = "grey", alpha = 0.4) +
 #   theme_minimal() +
@@ -483,35 +493,35 @@ query_metrics_norm <-normalize_df(query_metrics_all)
 # bottom_regions <- region_plot_df %>%
 #   slice_min(MAE, n = 4) %>%
 #   pull(region)
-# 
+#
 # all_errors_bottom <- all_errors %>% filter(region %in% bottom_regions)
-# 
+#
 # ggplot(all_errors_bottom,
 #        aes(x = error, fill = region)) +
 #   geom_density(alpha = 0.3) +
 #   scale_x_log10() +
 #   theme_minimal()
-# 
-# 
-# 
-# 
-# 
-# 
+#
+#
+#
+#
+#
+#
 # top_regions <- region_plot_df %>%
 #   slice_max(MAE, n = 4) %>%
 #   pull(region)
-# 
+#
 # all_errors_top <- all_errors %>% filter(region %in% top_regions)
-# 
+#
 # ggplot(all_errors_top,
 #        aes(x = error, fill = region)) +
 #   geom_density(alpha = 0.3) +
 #   scale_x_log10() +
 #   theme_minimal()
-# 
-# 
-# 
-# 
+#
+#
+#
+#
 # region_metrics_norm_negCorr <- region_metrics_all %>%
 #   group_by(region) %>%
 #   summarise(
@@ -522,36 +532,36 @@ query_metrics_norm <-normalize_df(query_metrics_all)
 #     count_negCorr_porc = count_negCorr/ total_count,
 #     count_posCorr_porc = count_posCorr/ total_count
 #   )
-# 
+#
 # region_metrics_all %>%
 #   filter(spearman_corr < 0) %>%
 #   group_by(region) %>%
 #   summarise(total_count   = n()) %>%
 #   arrange(desc(total_count))
-# 
+#
 
 
 # ###spurious relationship
 # spurious <-  correlations_df %>%
 #   filter(!is.na(spearman_corr), spearman_corr > -0.1, spearman_corr < 0.1)
-# 
+#
 # density_spurious_corr <- ggplot(spurious,
 #                                 aes(x = spearman_corr)) +
 #   geom_density(alpha = 0.3) +
 #   theme_minimal()
-# 
+#
 # ###weak non-positive relationship
 # weak <-  correlations_df %>%
 #   filter(!is.na(spearman_corr), spearman_corr > 0.1, spearman_corr < 0.5)
-# 
+#
 # density_weak_corr <- ggplot(weak,
 #                             aes(x = spearman_corr)) +
 #   geom_density(alpha = 0.3) +
 #   theme_minimal()
 
 
-# 
-# 
+#
+#
 # correlations_var_negCorr <- correlations_df %>%
 #   group_by(variable) %>%
 #   summarise(
@@ -561,7 +571,7 @@ query_metrics_norm <-normalize_df(query_metrics_all)
 #   mutate(
 #     porc_neg = count_negCorr / (count_negCorr + count_posCorr)
 #   )  %>%
-#   arrange(desc(porc_neg)) 
+#   arrange(desc(porc_neg))
 
 
 # bias_stats <- all_errors_bias %>%
@@ -570,7 +580,7 @@ query_metrics_norm <-normalize_df(query_metrics_all)
 #     zero = mean(error_bias == 0, na.rm = TRUE),
 #     pos = mean(error_bias > 0, na.rm = TRUE)
 #   )
-#   
+#
 # label_df <- data.frame(
 #   x = c(-max(abs(all_errors_bias$error_bias), na.rm = TRUE) * 0.6,
 #         0,
@@ -582,8 +592,8 @@ query_metrics_norm <-normalize_df(query_metrics_all)
 #     paste0("Positive: ", scales::percent(bias_stats$pos))
 #   )
 # )
-# 
-# 
+#
+#
 # bias_error <- ggplot(all_errors_bias, aes(x = error_bias)) +
 #   geom_histogram(bins = 50, fill = "tomato", alpha = 0.7) +
 #   geom_vline(xintercept = 0, linetype = "dashed") +
@@ -594,7 +604,7 @@ query_metrics_norm <-normalize_df(query_metrics_all)
 #     y = "Count"
 #   )
 # ggsave("bias_error.jpg", plot = bias_error, width = 10, height = 8, dpi = 300)
-# 
+#
 
 ##### otro
 
@@ -620,16 +630,16 @@ query_metrics_norm <-normalize_df(query_metrics_all)
 #     panel.grid.major.x = element_blank()
 #   ) +
 #   theme_minimal(base_size = 16)
-# 
-# 
+#
+#
 # ggsave("bias_ECDF_error.jpg", plot = ECDF_bias, width = 10, height = 8, dpi = 300)
 
 
 
 ####### heatmap #########
 
-# 
-# 
+#
+#
 # # -----------------------------
 # # 1. AGREGACIÓN DE ERROR
 # # -----------------------------
@@ -639,7 +649,7 @@ query_metrics_norm <-normalize_df(query_metrics_all)
 #     abs_error = mean(abs(value_ref - value_chY), na.rm = TRUE),
 #     .groups = "drop"
 #   )
-# 
+#
 # # -----------------------------
 # # 2. MATRIZ (queries como columnas)
 # # -----------------------------
@@ -647,31 +657,31 @@ query_metrics_norm <-normalize_df(query_metrics_all)
 #   mutate(cell = paste(region, year, sep = "_")) %>%
 #   select(query, cell, abs_error) %>%
 #   pivot_wider(names_from = query, values_from = abs_error)
-# 
+#
 # # quitar identificadores
 # mat_values <- mat %>% select(-cell)
-# 
+#
 # # asegurar numéricos puros
 # mat_values <- as.data.frame(lapply(mat_values, function(x) as.numeric(x)))
-# 
+#
 # # quitar queries sin variación
 # mat_values <- mat_values[, apply(mat_values, 2, sd, na.rm = TRUE) > 0]
-# 
+#
 # # -----------------------------
 # # 3. CORRELACIÓN ENTRE QUERIES
 # # -----------------------------
 # cor_mat <- cor(mat_values, use = "pairwise.complete.obs", method = "pearson")
-# 
+#
 # # -----------------------------
 # # 4. FILTRADO DE RELACIONES FUERTES
 # # -----------------------------
 # cor_mat_strong <- cor_mat
 # cor_mat_strong[abs(cor_mat_strong) < 0.8] <- NA
-# 
+#
 # # eliminar filas/columnas vacías
 # keep <- rowSums(!is.na(cor_mat_strong)) > 0
 # cor_mat_strong <- cor_mat_strong[keep, keep]
-# 
+#
 # # -----------------------------
 # # 5. LONG FORMAT PARA GGPLOT
 # # -----------------------------
@@ -679,7 +689,7 @@ query_metrics_norm <-normalize_df(query_metrics_all)
 #   rownames_to_column("query1") %>%
 #   pivot_longer(-query1, names_to = "query2", values_to = "corr") %>%
 #   filter(!is.na(corr))
-# 
+#
 # # -----------------------------
 # # 6. HEATMAP
 # # -----------------------------
@@ -695,8 +705,8 @@ query_metrics_norm <-normalize_df(query_metrics_all)
 #   theme(
 #     axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)
 #   )
-# 
-# ####### CLUSTERING ####### 
+#
+# ####### CLUSTERING #######
 # query_features <- all_errors %>%
 #   group_by(query) %>%
 #   summarise(
@@ -707,7 +717,7 @@ query_metrics_norm <-normalize_df(query_metrics_all)
 #                          use = "complete.obs"),
 #     n_obs = n()
 #   )
-# 
+#
 # var_presence <- all_errors %>%
 #   select(query, all_of(vars)) %>%
 #   pivot_longer(-query, names_to = "variable", values_to = "value") %>%
@@ -715,21 +725,21 @@ query_metrics_norm <-normalize_df(query_metrics_all)
 #   group_by(query, variable) %>%
 #   summarise(present = mean(present), .groups = "drop") %>%
 #   pivot_wider(names_from = variable, values_from = present, values_fill = 0)
-# 
+#
 # query_features <- query_features %>%
 #   left_join(var_presence, by = "query")
-# 
+#
 # query_features <- query_features %>%
 #   mutate(spearman_corr = ifelse(is.na(spearman_corr), 0, spearman_corr))
-# 
+#
 # df_clust <- query_features %>%
 #   select(-query)
-# 
+#
 # df_scaled <- scale(df_clust)
-# 
-# 
+#
+#
 # set.seed(123)
-# 
+#
 # ss <- numeric(10)
 # wss <- numeric(10)
 # for (k in 1:10) {
@@ -740,18 +750,18 @@ query_metrics_norm <-normalize_df(query_metrics_all)
 #      xlab = "Número de clusters (k)",
 #      ylab = "Within-cluster sum of squares",
 #      main = "Método del codo")
-# 
+#
 # k <- 3 # ajústalo si quieres
 # km <- kmeans(df_scaled, centers = k)
-# 
+#
 # query_features$cluster <- km$cluster
-# 
-# 
+#
+#
 # pca <- prcomp(df_scaled)
-# 
+#
 # pca_df <- as.data.frame(pca$x[,1:2])
 # pca_df$cluster <- as.factor(query_features$cluster)
-# 
+#
 # ggplot(pca_df, aes(PC1, PC2, color = cluster)) +
 #   geom_point() +
 #   theme_minimal()
