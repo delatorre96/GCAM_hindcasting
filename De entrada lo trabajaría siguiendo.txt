@@ -1,0 +1,20 @@
+De entrada lo trabajaría siguiendo estos pasos
+
+1) Alimentar Gcam con datos históricos de entrada, correr el modelo y obtener variables de salida estimadas.
+2) Medir el desajuste de las variables de salida estimadas por GCAM con las variables históricas para  determinar en qué variables o regiones GCAM se ha equivocado en mayor medida.
+3) Sabiendo las variables en donde más se equivoca, podemos hacer un análisis preliminar entre ambos: Estudiar t-test o mann Whitney test para saber si las distribuciones de las variables de gcam tienen semejanza estadística a las históricas o no, estudiar lags (igual gcam predice bien pero con cierto lag), test Granger para saber si hay cierta relación no espuria, estudiar cointegración, análisis de tendencia, estacionalidad,...etc.
+4) Antes de lanzar los algoritmos y pasar al análisis más profundo para buscar los parámetros que mejor se adecúan a las variables históricas, deberíamos hacer un emulador para poder correr muchas muchas simulaciones. Viendo lo que le cuesta a Gcam ejecutarse y todas las veces que va a ser necesaria su ejecución esto será imprescindible. El emulador podría ser con redes neuronales ya que son muchos datos y muy complejos.
+5) Tuning o configuración de los parámetros de GCAM. Aquí habría varias opciones de elaborar este trabajo:
+	A) Bayesian Calibrator (o Approximate Bayesian Computation):
+		A0) Como hay muchísimos parámetros en GCAM habría que seleccionar algunos más influyentes. Para ellos se haría un análisis de sensibilidad. Se ejecutan varias veces Gcam cambiando grupos de parámetros a la vez y se observa si las variables de salida (aquellas que más se alejaban de las variables históricas) cambian mucho o poco. Dados estos cambios, hacemos un ranking de parámetros más influyentes.
+		A1) Una vez definidos los parámetros que más influyen, se establecen unos rangos plausibles que pueden tomar
+		A2) Se establece una función de verosimilitud de densidad normal, es decir, una función que determine que los errores se distribuyen normalmente siendo máximo probable aquella verosimilitud que se acerca a losdatos históricos.
+		A3)Se va corriendo Gcam multitud de veces y en base a esta verosimilitud el algoritmo sabe si el parámetro se acerca en mayor o menor medida al valor real hasta que llega a una combinación certera
+		A4) Para evitar sobreajuste habría que comparar con otros datos históricos no usado en el algoritmo
+	B) Reinforcement Learning:
+		Se establece una función objetivo por la cual al agente se le "castiga" o se "premia" mientras va cambiando los parámetros. Esta función puede ser algo como el sumatorio de la diferencia entre cada variable histórica con respecto a la salida de Gcam usando un conjunto aleatorio de parámetros. Así se van cambiando de manera aleatoria distintos parametros y poco a poco el algoritmo va probando diferentes configuraciones hasta llegar a una configuración razonable.
+Este algoritmo es lento al principio pero luego puede encontrar la respuesta más rápidamente. La cosa es que a medida que el algoritmo falla, contabilizas cuánto ha fallado y en base a eso recua más o menos.
+	C) Genetic Algorithm (algoritmo evolutivo):
+		parecido a reinforcement learning pero en vez de hacerlo "secuencialmente" lo haces paralelamente
+		Es como funciona la evolución. Tienes N individuos en donde cada individuo es una configuración dada de los parámetros de GCAM. Para cada individuo se calcula lo que llaman función fitness, esto es una función que te dice qué tan buena es la solución (cómo de bien se acerca la configuración de parámetros a la realidad). Después se eligen las mejores configuraciones y pasamos a la ronda siguiente. Con las configuraciones de parámetros sobrevivientes, se cambian aleatoriamente algunos parámetros y se mira cuáles son mejores. Así iterativamente hasta llegar a una configuración "superviviente".
+		
