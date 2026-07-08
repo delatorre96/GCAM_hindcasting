@@ -1,13 +1,16 @@
 library(rgcam)
 
-pathToDbs <- "C:/Users/ignacio.delatorre/Documents/GCAM/outputs_gcam"
-my_gcamdb_basexdb <- "BaseYear"
+pathToDbs <- "C:/GCAM/Nacho/outputs_gcam"
+my_gcamdb_basexdb <- "hindcasting"
 
 conn <- localDBConn(pathToDbs, my_gcamdb_basexdb)
 
-myQueryfile  <- "allQueries_2010.xml"
+myQueryfile  <- "allQueries_2015.xml"
 
-scenariosAnalyze<-c( "Reference","BaseYear2010")
+scenariosAnalyze<-c('BaseYear2015', 'Reference')
 
-prj1 <- addScenario(conn = conn, proj = 'BaseYear2010.dat', scenario  = scenariosAnalyze, queryFile = myQueryfile)
+prj1 <- addScenario(conn = conn, proj = 'BaseYear2015.dat', scenario  = scenariosAnalyze, queryFile = myQueryfile)
 queries <- listQueries(prj1)
+
+
+

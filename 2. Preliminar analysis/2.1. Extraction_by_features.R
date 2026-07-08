@@ -8,9 +8,49 @@ library(patchwork)
 
 
 ######## Extracción ########
-prj1 <- loadProject(proj = "BaseYear2010.dat")
+prj1 <- loadProject(proj = "BaseYear2015.dat")
 queries <- listQueries(prj1)
-
+regions_of_interest <- europe_regions <- c(
+  "Albania",
+  "Austria",
+  "Belarus",
+  "Belgium",
+  "Bosnia and Herzegovina",
+  "Bulgaria",
+  "Croatia",
+  "Cyprus",
+  "Czech Republic",
+  "Denmark",
+  "Estonia",
+  "Finland",
+  "France",
+  "Germany",
+  "Greece",
+  "Hungary",
+  "Iceland",
+  "Ireland",
+  "Italy",
+  "Latvia",
+  "Lithuania",
+  "Luxembourg",
+  "Macedonia",
+  "Malta",
+  "Moldova",
+  "Netherlands",
+  "Norway",
+  "Poland",
+  "Portugal",
+  "Romania",
+  "Serbia and Montenegro",
+  "Slovakia",
+  "Slovenia",
+  "Spain",
+  "Sweden",
+  "Switzerland",
+  "Turkey",
+  "UK",
+  "Ukraine"
+)
 ######## Construcción de errores ########
 variables <- c()
 
@@ -25,7 +65,7 @@ for (query in queries) {
 
 variables <- unique(variables)
 
-cols_final <- c(variables, "MAE", "RMSE", "bias_dir", "spearman_corr", "query", "n")
+cols_final <- c(variables, "MAE", "RMSE", "bias_dir", "query", "n")
 
 df_final <- as.data.frame(matrix(ncol = length(cols_final), nrow = 0))
 colnames(df_final) <- cols_final
@@ -41,7 +81,7 @@ result_list <- list()
 #
 #   df <- getQuery(prj1, query)
 #
-#   if (all(c("BaseYear2010", "Reference") %in% unique(df$scenario))){
+#   if (all(c("BaseYear2015", "Reference") %in% unique(df$scenario))){
 #
 #     key_cols <- colnames(df)
 #     key_cols <- key_cols[!key_cols %in% c("scenario", "value")]
@@ -61,7 +101,7 @@ result_list <- list()
 #       rename(value_ref = value)
 #
 #     df_chY <- df %>%
-#       filter(scenario == "BaseYear2010") %>%
+#       filter(scenario == "BaseYear2015") %>%
 #       select(-scenario) %>%
 #       rename(value_chY = value)
 #
@@ -147,8 +187,11 @@ all_results = list()
 for (query in queries) {
 
   df <- getQuery(prj1, query)
+  if ('region' %in% colnames(df)){
+    df <- df %>% filter(region %in% regions_of_interest)
+  }
 
-  if (all(c("BaseYear2010", "Reference") %in% unique(df$scenario))) {
+  if (all(c("BaseYear2015", "Reference") %in% unique(df$scenario))) {
 
     key_cols <- colnames(df)
     key_cols <- key_cols[!key_cols %in% c("scenario", "value")]
@@ -159,7 +202,7 @@ for (query in queries) {
       rename(value_ref = value)
 
     df_chY <- df %>%
-      filter(scenario == "BaseYear2010") %>%
+      filter(scenario == "BaseYear2015") %>%
       select(-scenario) %>%
       rename(value_chY = value)
 
@@ -174,11 +217,11 @@ for (query in queries) {
         error = value_ref - value_chY,
         abs_error = abs(error),
         sq_error = error^2,
-        # bias_ratio =  ifelse(
-        #   value_chY == 0 & value_ref == 0,
-        #   0,
-        #   value_chY / value_ref
-        # ),
+        bias_ratio =  ifelse(
+          value_chY == 0 & value_ref == 0,
+          0,
+          value_chY / value_ref
+        ),
         rel_error = ifelse(error == 0 & value_ref == 0, 0,error / value_ref),
         query = query
     )
@@ -194,11 +237,8 @@ for (query in queries) {
       MAE = mean(abs_error, na.rm = TRUE),
       RMSE = sqrt(mean(sq_error, na.rm = TRUE)),
       rel_MAE_RMSE = ifelse(MAE == 0 & RMSE == 0, 1, RMSE / MAE),
-      # bias_ratio = mean(bias_ratio[is.finite(bias_ratio)], na.rm = TRUE),
+      bias_ratio = mean(bias_ratio[is.finite(bias_ratio)], na.rm = TRUE),
       rel_error = mean(rel_error[is.finite(rel_error)], na.rm = TRUE),
-      spearman_corr = cor(value_ref, value_chY,
-                          method = "spearman",
-                          use = "complete.obs"),
       .groups = "drop"
     ) %>% filter(year %in% c(2015, 2021))
   }else{
@@ -207,9 +247,8 @@ for (query in queries) {
       year = numeric(),
       MAE = numeric(),
       RMSE = numeric(),
-      # bias_ratio = numeric(),
-      rel_error = numeric(),
-      spearman_corr = numeric()
+      bias_ratio = numeric(),
+      rel_error = numeric()
     )
   }
   # -----------------------------
@@ -222,11 +261,8 @@ for (query in queries) {
       MAE = mean(abs_error, na.rm = TRUE),
       RMSE = sqrt(mean(sq_error, na.rm = TRUE)),
       rel_MAE_RMSE = ifelse(MAE == 0 & RMSE == 0, 1, RMSE / MAE),
-      # bias_ratio = mean(bias_ratio[is.finite(bias_ratio)], na.rm = TRUE),
+      bias_ratio = mean(bias_ratio[is.finite(bias_ratio)], na.rm = TRUE),
       rel_error = mean(rel_error[is.finite(rel_error)], na.rm = TRUE),
-      spearman_corr = cor(value_ref, value_chY,
-                          method = "spearman",
-                          use = "complete.obs"),
       .groups = "drop"
 
     )
@@ -239,13 +275,10 @@ for (query in queries) {
       MAE = mean(abs_error, na.rm = TRUE),
       RMSE = sqrt(mean(sq_error, na.rm = TRUE)),
       rel_MAE_RMSE = ifelse(MAE == 0 & RMSE == 0, 1, RMSE / MAE),
-      # bias_ratio = mean(bias_ratio[is.finite(bias_ratio)], na.rm = TRUE),
+      bias_ratio = mean(bias_ratio[is.finite(bias_ratio)], na.rm = TRUE),
       rel_error = mean(rel_error[is.finite(rel_error)], na.rm = TRUE),
-      spearman_corr = cor(value_ref, value_chY,
-                          method = "spearman",
-                          use = "complete.obs"),
       .groups = "drop"
-    ) %>% select(query,MAE , RMSE, rel_error, spearman_corr, region, year)
+    ) %>% select(query,MAE , RMSE, rel_error, region, year)
 
   }else{
     region_metrics <- tibble(
@@ -254,9 +287,8 @@ for (query in queries) {
       MAE = numeric(),
       RMSE = numeric(),
       rel_MAE_RMSE = numeric(),
-      # bias_ratio = numeric(),
-      rel_error = numeric(),
-      spearman_corr = numeric()
+      bias_ratio = numeric(),
+      rel_error = numeric()
     )
       query_errors <- tibble(
         query = character(),
@@ -264,9 +296,8 @@ for (query in queries) {
         year = numeric(),
         MAE = numeric(),
         RMSE = numeric(),
-        # bias_ratio = numeric(),
-        rel_error = numeric(),
-        spearman_corr = numeric()
+        bias_ratio = numeric(),
+        rel_error = numeric()
     )
   }
   # -----------------------------
@@ -279,11 +310,8 @@ for (query in queries) {
       MAE = mean(abs_error, na.rm = TRUE),
       RMSE = sqrt(mean(sq_error, na.rm = TRUE)),
       rel_MAE_RMSE = ifelse(MAE == 0 & RMSE == 0, 1, RMSE / MAE),
-      # bias_ratio = mean(bias_ratio[is.finite(bias_ratio)], na.rm = TRUE),
-      rel_error = mean(rel_error[is.finite(rel_error)], na.rm = TRUE),
-      spearman_corr = cor(value_ref, value_chY,
-                          method = "spearman",
-                          use = "complete.obs"),
+      bias_ratio = mean(bias_ratio[is.finite(bias_ratio)], na.rm = TRUE),
+      rel_error = mean(rel_error[is.finite(rel_error)], na.rm = TRUE),,
       .groups = "drop"
     )
 
