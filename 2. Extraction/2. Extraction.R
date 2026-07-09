@@ -10,8 +10,6 @@ library(patchwork)
 ######## Extracción ########
 prj1 <- loadProject(proj = "BaseYear2015.dat")
 queries <- listQueries(prj1)
-
-######## Construcción de errores ########
 regions_of_interest <- europe_regions <- c(
   "Albania",
   "Austria",
@@ -53,7 +51,7 @@ regions_of_interest <- europe_regions <- c(
   "UK",
   "Ukraine"
 )
-
+######## Construcción de errores ########
 variables <- c()
 
 for (query in queries) {
@@ -67,16 +65,8 @@ for (query in queries) {
 
 variables <- unique(variables)
 
-cols_final <- c(variables, "MAE", "RMSE", "bias_dir", "query", "n")
 
-df_final <- as.data.frame(matrix(ncol = length(cols_final), nrow = 0))
-colnames(df_final) <- cols_final
-
-
-
-result_list <- list()
-i <- 1
-
+all_results = list()
 
 for (query in queries) {
 
@@ -85,20 +75,12 @@ for (query in queries) {
     df <- df %>% filter(region %in% regions_of_interest)
   }
 
+  df <- df %>% filter(year == 2021)
 
-  if (all(c("BaseYear2015", "Reference") %in% unique(df$scenario))){
+  if (all(c("BaseYear2015", "Reference") %in% unique(df$scenario))) {
 
     key_cols <- colnames(df)
     key_cols <- key_cols[!key_cols %in% c("scenario", "value")]
-
-    if ("technology" %in% key_cols) {
-
-      if (all(grepl("=", df$technology, fixed = TRUE), na.rm = TRUE)) {
-        key_cols <- setdiff(key_cols, "technology")
-        df <- df %>% select (-technology)
-      }
-    }
-
     # separar escenarios
     df_ref <- df %>%
       filter(scenario == "Reference") %>%
@@ -111,48 +93,49 @@ for (query in queries) {
       rename(value_chY = value)
 
     df_comp <- df_ref %>%
-      inner_join(df_chY, by = key_cols) %>%
-      filter(is.finite(value_ref), is.finite(value_chY)) %>%
-      group_by(across(all_of(setdiff(key_cols, "year")))) %>%
-      summarise(
+      inner_join(df_chY, by = key_cols)
 
-        n = n(),
+    # error base
+    df_comp <- df_comp %>%
+      mutate(
+        error = value_ref - value_chY,
+        abs_error = abs(error),
+        sq_error = error^2,
+        bias_ratio =  ifelse(
+          value_chY == 0 & value_ref == 0,
+          0,
+          value_chY / value_ref
+        ),
+        rel_error = ifelse(error == 0 & value_ref == 0, 0,error / value_ref),
+        query = query
+      )
 
-        MAE = if (n > 0) {
-          mean(abs(value_ref - value_chY))
-        } else {
-          NA_real_
-        },
+    df_errors <- df_comp %>%
+      select(
+        query,
+        any_of("region"),
+        year,
+        value_ref,
+        value_chY,
+        error,
+        abs_error,
+        rel_error,
+        any_of(variables)
+      )
 
-        RMSE = if (n > 0) {
-          sqrt(mean((value_ref - value_chY)^2))
-        } else {
-          NA_real_
-        },
+    all_results[[query]] <- list(
+      errors = df_errors
+    )
 
-        bias_dir = if (n > 0) {
-          mean(sign(value_chY - value_ref))
-        } else {
-          NA_real_
-        },
-
-        query = query,
-        .groups = "drop"
-      ) %>%
-      select(-Units)
-
-    missing_cols <- setdiff(cols_final, colnames(df_comp))
-
-    df_comp[missing_cols] <- NA
-
-    result_list[[i]] <- df_comp
-    i <- i + 1
 
   }
-
 }
 
-df_final <- dplyr::bind_rows(result_list)
 
-write.csv(df_final,"Data/errors_indicators.csv", row.names = FALSE)
+######## Unificación ########
+all_errors <- bind_rows(lapply(all_results, `[[`, "errors"))
 
+if (!dir.exists("Data")) {
+  dir.create("Data")
+}
+write.csv(all_errors,"Data/all_errors.csv", row.names = FALSE)

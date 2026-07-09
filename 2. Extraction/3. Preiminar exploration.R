@@ -92,55 +92,55 @@ kable(summary_table, format = "latex", booktabs = TRUE, digits = 2)
 
 #################### NEGATIVE CORRELATIONS ####################
 
-
-correlations_df <- df_long %>%
-  group_by(query, region, variable) %>%
-  summarise(
-    spearman_corr = cor(value_ref, value_chY,
-                        method = "spearman",
-                        use = "complete.obs"),
-    .groups = "drop"
-  )
-
-### spurious and negative corr
-negCorr <- correlations_df %>%
-  filter(!is.na(spearman_corr), spearman_corr <= 0.1)
-
-###### Densities ######
-
-### Total
-density_corr <- ggplot(correlations_df,
-                       aes(x = spearman_corr)) +
-  geom_density(fill = "steelblue", alpha = 0.4) +
-  labs(
-    title = "Distribution of Spearman Correlations",
-    subtitle = "Across all time series comparisons",
-    x = "Spearman correlation",
-    y = "Density"
-  )  +
-  theme_minimal(base_size = 16)
-
-
-
-density_neg_corr <- ggplot(negCorr,
-                           aes(x = spearman_corr)) +
-  geom_density(fill = "tomato", alpha = 0.4) +
-  labs(
-    title = "Low or Spurious Correlations",
-    subtitle = "Spearman correlation ≤ 0.1",
-    x = "Spearman correlation",
-    y = "Density"
-  )  +
-  theme_minimal(base_size = 16)
-
-
-ggsave("density_corr_all.jpg",
-       plot = density_corr,
-       width = 8, height = 5, dpi = 300)
-
-ggsave("density_corr_low.jpg",
-       plot = density_neg_corr,
-       width = 8, height = 5, dpi = 300)
+#
+# correlations_df <- df_long %>%
+#   group_by(query, region, variable) %>%
+#   summarise(
+#     spearman_corr = cor(value_ref, value_chY,
+#                         method = "spearman",
+#                         use = "complete.obs"),
+#     .groups = "drop"
+#   )
+#
+# ### spurious and negative corr
+# negCorr <- correlations_df %>%
+#   filter(!is.na(spearman_corr), spearman_corr <= 0.1)
+#
+# ###### Densities ######
+#
+# ### Total
+# density_corr <- ggplot(correlations_df,
+#                        aes(x = spearman_corr)) +
+#   geom_density(fill = "steelblue", alpha = 0.4) +
+#   labs(
+#     title = "Distribution of Spearman Correlations",
+#     subtitle = "Across all time series comparisons",
+#     x = "Spearman correlation",
+#     y = "Density"
+#   )  +
+#   theme_minimal(base_size = 16)
+#
+#
+#
+# density_neg_corr <- ggplot(negCorr,
+#                            aes(x = spearman_corr)) +
+#   geom_density(fill = "tomato", alpha = 0.4) +
+#   labs(
+#     title = "Low or Spurious Correlations",
+#     subtitle = "Spearman correlation ≤ 0.1",
+#     x = "Spearman correlation",
+#     y = "Density"
+#   )  +
+#   theme_minimal(base_size = 16)
+#
+#
+# ggsave("density_corr_all.jpg",
+#        plot = density_corr,
+#        width = 8, height = 5, dpi = 300)
+#
+# ggsave("density_corr_low.jpg",
+#        plot = density_neg_corr,
+#        width = 8, height = 5, dpi = 300)
 
 
 
@@ -149,42 +149,26 @@ ggsave("density_corr_low.jpg",
 region_metrics_all <- read.csv('Data/region_metrics_all.csv')
 
 
-region_plot_df <- region_metrics_all %>%
+region_plot_df <- region_metrics_all %>% drop_na() %>%
   group_by(region) %>% summarise(MAE = sum(MAE),
                                  RMSE = sum(RMSE),
                                  rel_MAE_RMSE = mean(rel_MAE_RMSE),
-                                 rel_error = mean(rel_error),
-                                 Min_spearman_corr = min(spearman_corr, na.rm = TRUE))  %>%
+                                 rel_error = mean(rel_error)
+                                 )  %>%
   arrange(desc(MAE))
-
-### Gráficos región
-
-region_plot_df <- region_plot_df %>%
-  mutate(rel_MAE_RMSE_cap = rel_MAE_RMSE/max(rel_MAE_RMSE))
-
-bars_relRMSE_MAE_by_region <- ggplot(
+bars_RMSE_error_region <- ggplot(
   region_plot_df,
   aes(
-    x = reorder(region, MAE),
-    y = MAE,
-    fill = rel_MAE_RMSE
+    x = reorder(region, RMSE),
+    y = RMSE
   )
 ) +
   geom_col(width = 0.75, alpha = 0.9) +
-  coord_flip() +
-  scale_fill_gradient2(
-    low = "#2b6cb0",
-    mid = "white",
-    high = "#c53030",
-    midpoint = median(region_plot_df$rel_MAE_RMSE, na.rm = TRUE),
-    limits = quantile(region_plot_df$rel_MAE_RMSE, c(0.05, 0.95), na.rm = TRUE),
-    name = "RMSE / MAE"
-  ) +
+  coord_flip()  +
   labs(
-    title = "Regional Error Ranking",
-    subtitle = "MAE with relative RMSE/MAE signal",
+    title = "Regional RMSE",
     x = NULL,
-    y = "Mean Absolute Error"
+    y = "Root Mean Square Error"
   ) +
   theme_minimal(base_size = 13) +
   theme(
@@ -194,20 +178,58 @@ bars_relRMSE_MAE_by_region <- ggplot(
     axis.text.y = element_text(size = 9),
     legend.position = "right"
   )
-
-ggsave("bars_relRMSE_MAE_by_region.jpg",
-       plot = bars_relRMSE_MAE_by_region,
+ggsave("bars_RMSE.jpg",
+       plot = bars_RMSE_error_region,
        width = 8, height = 5, dpi = 300)
+### Gráficos región
+#
+# region_plot_df <- region_plot_df %>%
+#   mutate(rel_MAE_RMSE_cap = rel_MAE_RMSE/max(rel_MAE_RMSE))
+#
+# bars_relRMSE_MAE_by_region <- ggplot(
+#   region_plot_df,
+#   aes(
+#     x = reorder(region, MAE),
+#     y = MAE,
+#     fill = rel_MAE_RMSE
+#   )
+# ) +
+#   geom_col(width = 0.75, alpha = 0.9) +
+#   coord_flip() +
+#   scale_fill_gradient2(
+#     low = "#2b6cb0",
+#     mid = "white",
+#     high = "#c53030",
+#     midpoint = median(region_plot_df$rel_MAE_RMSE, na.rm = TRUE),
+#     limits = quantile(region_plot_df$rel_MAE_RMSE, c(0.05, 0.95), na.rm = TRUE),
+#     name = "RMSE / MAE"
+#   ) +
+#   labs(
+#     title = "Regional Error Ranking",
+#     subtitle = "MAE with relative RMSE/MAE signal",
+#     x = NULL,
+#     y = "Mean Absolute Error"
+#   ) +
+#   theme_minimal(base_size = 13) +
+#   theme(
+#     plot.title = element_text(face = "bold"),
+#     panel.grid.major.y = element_blank(),
+#     panel.grid.minor = element_blank(),
+#     axis.text.y = element_text(size = 9),
+#     legend.position = "right"
+#   )
+#
+
 
 
 region_plot_df <- region_plot_df %>%
-  mutate(rel_error_cap = pmax(pmin(rel_error, 1), -1))
+  mutate(rel_error_norm = rel_error / max(abs(rel_error), na.rm = TRUE))
 bars_MAE_dir_error_region <- ggplot(
   region_plot_df,
   aes(
     x = reorder(region, MAE),
     y = MAE,
-    fill = rel_error_cap
+    fill = rel_error_norm
   )
 ) +
   geom_col(width = 0.75, alpha = 0.9) +
@@ -253,47 +275,47 @@ density_errors_top20Regions <- ggplot(all_errors_top,
   theme_minimal()
 
 #### Corr per region
-
-corr_region_negCorr <- correlations_df %>%
-  group_by(region) %>%
-  summarise(
-    count_negCorr = sum(spearman_corr <= 0.1, na.rm = TRUE),
-    count_posCorr = sum(spearman_corr > 0.1, na.rm = TRUE)
-  ) %>%
-  mutate(
-    porc_neg = count_negCorr / (count_negCorr + count_posCorr)
-  ) %>%
-  arrange(desc(porc_neg))
-
-negCorr_per_region <- ggplot(
-  corr_region_negCorr,
-  aes(
-    x = reorder(region, porc_neg),
-    y = porc_neg
-  )
-) +
-  geom_col(width = 0.75, fill = "#2b6cb0", alpha = 0.85) +
-  coord_flip() +
-  scale_y_continuous(labels = scales::percent) +
-  labs(
-    title = "Share of Spurious or Negative Correlations by Region",
-    subtitle = "Proportion of Spearman correlations ≤ 0.1",
-    x = NULL,
-    y = "Share of weak correlations"
-  ) +
-  theme_minimal(base_size = 13) +
-  theme(
-    plot.title = element_text(face = "bold"),
-    panel.grid.major.y = element_blank(),
-    panel.grid.minor = element_blank(),
-    axis.text.y = element_text(size = 9)
-  )
-
-
-ggsave("negCorr_per_region.jpg",
-       plot = negCorr_per_region,
-       width = 8, height = 5, dpi = 300)
-
+#
+# corr_region_negCorr <- correlations_df %>%
+#   group_by(region) %>%
+#   summarise(
+#     count_negCorr = sum(spearman_corr <= 0.1, na.rm = TRUE),
+#     count_posCorr = sum(spearman_corr > 0.1, na.rm = TRUE)
+#   ) %>%
+#   mutate(
+#     porc_neg = count_negCorr / (count_negCorr + count_posCorr)
+#   ) %>%
+#   arrange(desc(porc_neg))
+#
+# negCorr_per_region <- ggplot(
+#   corr_region_negCorr,
+#   aes(
+#     x = reorder(region, porc_neg),
+#     y = porc_neg
+#   )
+# ) +
+#   geom_col(width = 0.75, fill = "#2b6cb0", alpha = 0.85) +
+#   coord_flip() +
+#   scale_y_continuous(labels = scales::percent) +
+#   labs(
+#     title = "Share of Spurious or Negative Correlations by Region",
+#     subtitle = "Proportion of Spearman correlations ≤ 0.1",
+#     x = NULL,
+#     y = "Share of weak correlations"
+#   ) +
+#   theme_minimal(base_size = 13) +
+#   theme(
+#     plot.title = element_text(face = "bold"),
+#     panel.grid.major.y = element_blank(),
+#     panel.grid.minor = element_blank(),
+#     axis.text.y = element_text(size = 9)
+#   )
+#
+#
+# ggsave("negCorr_per_region.jpg",
+#        plot = negCorr_per_region,
+#        width = 8, height = 5, dpi = 300)
+#
 
 ##Sistematicamente encontramos que hay un bias negativo, lo cual implica que value_chY > value_ref, es decir el valor estimado sobreestimado sobre el histórico
 
@@ -302,8 +324,8 @@ ggsave("negCorr_per_region.jpg",
 
 ####Top 20% queries with more error acumulado. Qué query acumulad más error?
 query_metrics_top20 <- query_metrics_all %>%
-  filter(MAE > quantile(MAE, 0.80, na.rm = TRUE)) %>%
-  arrange(desc(MAE)) %>%
+  filter(MAE > quantile(RMSE, 0.80, na.rm = TRUE)) %>%
+  arrange(desc(RMSE)) %>%
   slice_head(n = 10) %>% mutate(query = ifelse(query == 'international competition share-weights (Armington intl. taste)',
                                                'international competition share-weights', query))
 
