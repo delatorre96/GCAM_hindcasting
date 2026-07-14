@@ -17,11 +17,32 @@ df_long <- all_errors %>%
 
 
 query_errors <- df_long %>%
-  select(query, error) %>%
+  select(query, value_ref, error) %>%
   group_by(query) %>%
   summarise(
     RMSE = sqrt(mean(error^2)),
     MAE = mean(abs(error)),
+    MaxAE = max(abs(error)),
+    MeanRef = mean(abs(value_ref)),
+
+    NRMSE = if_else(
+      MeanRef == 0,
+      RMSE,
+      RMSE / MeanRef
+    ),
+
+    NMAE = if_else(
+      MeanRef == 0,
+      MAE,
+      MAE / MeanRef
+    ),
+
+    NMaxAE = if_else(
+      MeanRef == 0,
+      MaxAE,
+      MaxAE / MeanRef
+    ),
+
     ratio_RMSE_MAE = RMSE / MAE,
     .groups = "drop"
   ) %>%
@@ -34,17 +55,24 @@ query_errors <- df_long %>%
       TRUE ~ "Extreme outliers"
     )
   ) %>%
-  arrange(desc(RMSE))
+  arrange(desc(NRMSE)) %>%
+  mutate(NRMSE_cumsum =  cumsum(NRMSE)/sum(NRMSE))
+
 
 #### Those queries that has low error can be deleted
-min_error <- 1
-query_errors <- query_errors %>%
-  filter(RMSE > min_error)
+min_max_error  <- 1000
+min_mean_error <- 80
+
+worst_query_errors <- query_errors %>%
+  filter(
+    NMaxAE > min_max_error |
+      NMAE > min_mean_error
+  )
 
 #### Those queries that has high  variability (RMSE>>MAE) has to be explore what explains the total error query
-
-query_errors_highVar <- query_errors %>%
-  filter(ratio_RMSE_MAE >= 1.7)
+#
+# query_errors_highVar <- query_errors %>%
+#   filter(ratio_RMSE_MAE >= 1.7)
 
 #### After this filters, we can now study each query
 
@@ -53,8 +81,13 @@ if (!dir.exists("Data")) {
 }
 
 
-write.csv(query_errors, "Data/query_errors.csv", row.names = FALSE)
-write.csv(query_errors_highVar, "Data/query_errors_highVar.csv", row.names = FALSE)
+for (query_i in unique(worst_query_errors$query)) {
+  query_errors <- all_errors[all_errors$query == query_i, ] %>%
+    select(where(~ !all(is.na(.)))) %>%
+    write.csv(paste0('Data/',query_i,'.csv'))
+}
+
+write.csv(worst_query_errors, "Data/worst_query_errors.csv", row.names = FALSE)
 
 
 

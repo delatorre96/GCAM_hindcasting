@@ -79,17 +79,20 @@ module_socio_L102.GDP <- function(command, ...) {
     ## Step 2: Prepare future GDP projections ----
     # Note that the base year or PPP/MER doesn't matter here
     # We will apply growth rates to historical values
+    ###################################
     L100.GDP_bilusd_SSP_ctry_Yfut_raw %>%
-      left_join_error_no_match(iso_region32_lookup, by = 'iso') %>%
+      left_join_error_no_match(iso_region32_lookup, by = "iso") %>%
       group_by(scenario, GCAM_region_ID, year) %>%
       summarize(gdp = sum(gdp, na.rm = TRUE), .groups = "drop") %>%
-      ungroup() %>%  # aquí
-      complete(nesting(scenario, GCAM_region_ID), year = c(socioeconomics.FINAL_HIST_YEAR, FUTURE_YEARS)) %>%
+      complete(
+        nesting(scenario, GCAM_region_ID),
+        year = c(socioeconomics.FINAL_HIST_YEAR, FUTURE_YEARS)
+      ) %>%
       group_by(scenario, GCAM_region_ID) %>%
       mutate(gdp = approx_fun(year, gdp)) %>%
       ungroup() ->
       gdp_bilusd_rgn_Yfut
-
+    ###################################
     ## Units are billions of 2017$ but relative ratio will be used when connecting to historical data
 
 
@@ -139,7 +142,7 @@ module_socio_L102.GDP <- function(command, ...) {
       replace_na(list(gdp_g = 1)) %>%
       mutate(gdp_g_adj =  pmax(1, gdp_g),
              gdp_cum = cumprod(gdp_g_adj)
-             ) %>%
+      ) %>%
       mutate(gdp = gdp[year == socioeconomics.GDP_ADJ_NO_NEG_GROWTH_YEAR] * gdp_cum) %>% ungroup %>%
       select(names(gdp.mil90usd.scen.rgn.yr_1)) %>%
       bind_rows(
@@ -147,7 +150,7 @@ module_socio_L102.GDP <- function(command, ...) {
           filter(!(GCAM_region_ID %in% GDP_Adj_No_Neg_Growth_GCAM_region_ID & year >= socioeconomics.GDP_ADJ_NO_NEG_GROWTH_YEAR))
       ) %>%
       arrange(GCAM_region_ID, scenario, year) %>%
-      filter(year %in% c(HISTORICAL_YEARS, FUTURE_YEARS)) ->
+      filter(year >= min(HISTORICAL_YEARS)) ->
       gdp.mil90usd.scen.rgn.yr
 
 
@@ -160,7 +163,7 @@ module_socio_L102.GDP <- function(command, ...) {
       # left join (not LJENM) here as NA expected (mainly due to tiny island area diff)
       left_join(L100.Pop_thous_ctry_Yh %>%
                   rename(population = value),
-        by = c("iso", "year")) %>%
+                by = c("iso", "year")) %>%
       filter(year <= max(MODEL_BASE_YEARS)) %>%
       mutate(value = gdp / population) %>%
       select(iso, year, value) %>%
@@ -174,6 +177,7 @@ module_socio_L102.GDP <- function(command, ...) {
     ## calculate per-capita GDP.  This is another final output
     pcgdp.thous90usd.scen.rgn.yr <-
       gdp.mil90usd.scen.rgn.yr %>%
+      filter(year != 2020) %>%
       left_join_error_no_match(pop.thous.scen.rgn.yr,
                                by = c('scenario', 'GCAM_region_ID', 'year')) %>%
       mutate(pcgdp = gdp / population) %>%
@@ -276,7 +280,7 @@ module_socio_L102.GDP <- function(command, ...) {
 
     return_data(MODULE_OUTPUTS)
 
-    } else {
+  } else {
     stop("Unknown command")
   }
 }
