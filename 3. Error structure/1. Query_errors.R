@@ -79,13 +79,14 @@ worst_query_errors <- query_errors %>%
 if (!dir.exists("Data")) {
   dir.create("Data")
 }
+write.csv(query_errors, "Data/query_errors.csv", row.names = FALSE)
 
-
-for (query_i in unique(worst_query_errors$query)) {
-  query_errors <- all_errors[all_errors$query == query_i, ] %>%
-    select(where(~ !all(is.na(.)))) %>%
-    write.csv(paste0('Data/',query_i,'.csv'))
-}
+# 
+# for (query_i in unique(worst_query_errors$query)) {
+#   query_errors <- all_errors[all_errors$query == query_i, ] %>%
+#     select(where(~ !all(is.na(.)))) %>%
+#     write.csv(paste0('Data/',query_i,'.csv'))
+# }
 
 write.csv(worst_query_errors, "Data/worst_query_errors.csv", row.names = FALSE)
 

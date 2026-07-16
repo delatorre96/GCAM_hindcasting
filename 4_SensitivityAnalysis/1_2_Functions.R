@@ -1,3 +1,9 @@
+library(xml2)
+library(dplyr)
+library(purrr)
+library(tibble)
+library(stringr)
+
 set_gcam_paths <- function(gcam_path) {
   #Exmple:
   #dir_gcamdata <- "C:/Users/ignacio.delatorre/Documents/Understanding GCAM/gcam-core/input/gcamdata"
@@ -5,30 +11,236 @@ set_gcam_paths <- function(gcam_path) {
   config_file <<-  paste0(gcam_path,'/exe/configuration.xml')
   run_gcam_file <<- paste0(gcam_path,'/exe/run-gcam.bat')
   dir_gcamdata <<- paste0(gcam_path,'/input/gcamdata')
-  dir_chunks <<- paste0(dir_gcamdata,'/R')
-  dir_csvs_iniciales <<- paste0(dir_gcamdata,'/inst/extdata')
-  batch_queries_file <<- paste0(dir_gcam,'/exe/batch_queries/xmldb_batch.xml')
+  dir_xml <<- paste0(gcam_path,'/input/gcamdata/xml')
 
   print(dir_gcam)
   print(config_file)
   print(run_gcam_file)
   print(dir_gcamdata)
-  print(dir_chunks)
-  print(dir_csvs_iniciales)
-  print(batch_queries_file)
+  print(dir_xml)
+}
+
+get_xml_files <- function(config_path) {
+  
+  # Leer el XML
+  doc <- read_xml(config_path)
+  
+  # Extraer todos los Value de ScenarioComponents
+  paths <- xml_text(xml_find_all(doc, "//ScenarioComponents/Value"))
+  
+  # Quedarse sólo con los archivos de gcamdata/xml
+  paths <- paths[grepl("gcamdata/xml", paths)]
+  
+  # Extraer únicamente el nombre del archivo
+  xml_files <- basename(paths)
+  
+  return(xml_files)
+}
+
+get_xmls_with_logit <- function(xml_files, xml_dir) {
+  Filter(function(f) {
+    doc <- read_xml(file.path(xml_dir, f))
+    length(xml_find_all(doc, ".//logit-exponent")) > 0
+  }, xml_files)
 }
 
 
-get_csv_info <- function(csv_file) {
-  dir_iniciar <- getwd()
-  on.exit(setwd(dir_iniciar), add = TRUE)
-  setwd(dir_csvs_iniciales)
-  path <- find_csv_file(csv_file, optional = TRUE)
-  lines <- readLines(path)
-  header_lines <- lines[grepl("^#", lines)]
-  df <- read.csv(path, comment.char = '#', check.names = FALSE)
-  return(list(header_lines = header_lines, df = df, path = path))
+extraer_logits <- function(xml_file){
+  
+  library(xml2)
+  
+  doc <- read_xml(xml_file)
+  
+  logits <- xml_find_all(doc, ".//logit-exponent")
+  
+  salida <- vector("list", length(logits))
+  
+  for(i in seq_along(logits)){
+    
+    logit <- logits[[i]]
+    
+    padres <- xml_parents(logit)
+    
+    region <- NA
+    supplysector <- NA
+    subsector <- NA
+    level <- NA
+    
+    for(p in padres){
+      
+      etiqueta <- xml_name(p)
+      
+      if(etiqueta == "region"){
+        region <- xml_attr(p, "name")
+      }
+      
+      if(etiqueta == "supplysector"){
+        supplysector <- xml_attr(p, "name")
+        level <- "supplysector"
+      }
+      
+      if(etiqueta == "subsector"){
+        subsector <- xml_attr(p, "name")
+        level <- "subsector"
+      }
+      
+    }
+    
+    salida[[i]] <- data.frame(
+      
+      id = i,
+      
+      region = region,
+      
+      supplysector = supplysector,
+      
+      subsector = subsector,
+      
+      level = level,
+      
+      fillout = xml_attr(logit,"fillout"),
+      
+      year = as.numeric(xml_attr(logit,"year")),
+      
+      logit = as.numeric(xml_text(logit)),
+      
+      xpath = xml_path(logit),
+      
+      stringsAsFactors = FALSE
+      
+    )
+    
+  }
+  
+  do.call(rbind, salida)
+  
 }
+
+
+
+
+extraer_logits_anyXML<- function(xml_file){
+  
+  library(xml2)
+  
+  doc <- read_xml(xml_file)
+  
+  logits <- xml_find_all(doc, ".//logit-exponent")
+  
+  salida <- vector("list", length(logits))
+  
+  for(i in seq_along(logits)){
+    
+    logit <- logits[[i]]
+    
+    padres <- xml_parents(logit)
+    
+    region <- NA
+    supplysector <- NA
+    subsector <- NA
+    level <- NA
+    
+    for(p in padres){
+      
+      etiqueta <- xml_name(p)
+      
+      if(etiqueta == "region"){
+        region <- xml_attr(p,"name")
+      }
+      
+      if(etiqueta == "supplysector"){
+        supplysector <- xml_attr(p,"name")
+        level <- "supplysector"
+      }
+      
+      if(etiqueta == "subsector"){
+        subsector <- xml_attr(p,"name")
+        level <- "subsector"
+      }
+      
+    }
+    
+    salida[[i]] <- data.frame(
+      
+      xml_file = basename(xml_file),
+      
+      id = i,
+      
+      region = region,
+      
+      supplysector = supplysector,
+      
+      subsector = subsector,
+      
+      level = level,
+      
+      fillout = xml_attr(logit,"fillout"),
+      
+      year = as.numeric(xml_attr(logit,"year")),
+      
+      logit = as.numeric(xml_text(logit)),
+      
+      xpath = xml_path(logit),
+      
+      stringsAsFactors = FALSE
+      
+    )
+    
+  }
+  
+  do.call(rbind,salida)
+  
+}
+
+
+
+
+
+insertar_logits <- function(xml_entrada,
+                            tabla_logits,
+                            xml_salida){
+  
+  library(xml2)
+  
+  doc <- read_xml(xml_entrada)
+  
+  for(i in seq_len(nrow(tabla_logits))){
+    
+    nodo <- xml_find_first(doc,
+                           tabla_logits$xpath[i])
+    
+    if(inherits(nodo,"xml_missing"))
+      next
+    
+    nuevo <- xml_add_sibling(
+      nodo,
+      "logit-exponent",
+      .where="after",
+      as.character(tabla_logits$logit[i])
+    )
+    
+    xml_set_attr(
+      nuevo,
+      "fillout",
+      as.character(tabla_logits$fillout[i])
+    )
+    
+    xml_set_attr(
+      nuevo,
+      "year",
+      as.character(tabla_logits$year[i])
+    )
+    
+  }
+  
+  write_xml(doc,
+            xml_salida,
+            options="format")
+  
+}
+
+
+
 
 
 run_gcam <- function(bat_path) {
@@ -41,110 +253,15 @@ run_gcam <- function(bat_path) {
   return(status)
 }
 
-introduceUncertainty <- function(df,
-                                 relative_uncertainty,
-                                 integer_exponent = FALSE) {
-
-  if ("logit.exponent" %in% names(df)) {
-
-    if (!is.numeric(df$logit.exponent)) {
-
-      warning("'logit.exponent' no es numérica.")
-
-    } else {
-
-      original <- df$logit.exponent
-
-      df$logit.exponent <- sapply(original, function(x) {
-
-        if (is.na(x) || x == 0) {
-
-          return(x)
-
-        }
-
-        factor <- runif(1,
-                        1 - relative_uncertainty,
-                        1 + relative_uncertainty)
-
-        nuevo <- round(x * factor, digits = 2)
-
-        if (integer_exponent)
-          nuevo <- round(nuevo)
-
-        nuevo
-      })
-    }
-  }
-
-  df
-}
-
-# introduceUncertainty <- function(df,
-#                                  relative_uncertainty,
-#                                  integer_exponent = FALSE) {
-#   
-#   if (!"logit.exponent" %in% names(df))
-#     return(df)
-#   
-#   if (!is.numeric(df$logit.exponent)) {
-#     warning("'logit.exponent' no es numérica.")
-#     return(df)
-#   }
-#   
-#   idx <- df$subsector == "refined liquids"
-#   
-#   if (any(idx)) {
-#     
-#     x <- df$logit.exponent[idx]
-#     
-#     if (!is.na(x) && x != 0) {
-#       
-#       factor <- runif(
-#         1,
-#         1 - relative_uncertainty,
-#         1 + relative_uncertainty
-#       )
-#       
-#       nuevo <- round(x * factor, 1)
-#       
-#       if (integer_exponent)
-#         nuevo <- round(nuevo)
-#       
-#       df$logit.exponent[idx] <- nuevo
-#     }
-#   }
-#   
-#   df
-# }
-
-change_csvs <- function(logit_EUR_files,
-                        relative_uncertainty,
-                        integer_exponent){
-  for (i in logit_EUR_files){
-    l <- get_csv_info(i)
-    df_i <- l$df
-    headers <- l$header_lines
-    path <- l$path
-    
-    df_i_changed <- introduceUncertainty(df_i,relative_uncertainty, integer_exponent)
-    path <- paste0(dir_csvs_iniciales,'/',path)
-    
-    # Reescribir CSV
-    writeLines(headers, path)
-    suppressWarnings(
-      write.table(df_i_changed, path, sep = ",", append = TRUE,
-                  row.names = FALSE, quote = FALSE, na = "")
-      
-    )
-  }
-}
-
 
 
 
 append_input <- function(df, output_file) {
-  
+  dir.create(
+    file.path(thisScript_path, "Data", "inputs"),
+    recursive = TRUE,
+    showWarnings = FALSE
+  )
   # Calcular la iteración
   if (!file.exists(output_file)) {
     
@@ -173,32 +290,6 @@ append_input <- function(df, output_file) {
 }
 
 
-
-append_iteration_inputs <- function(logit_EUR_files){
-  
-  for (i in logit_EUR_files){
-    l <- get_csv_info(i)
-    df_i <- l$df
-    name <- tools::file_path_sans_ext(basename(i))
-    dir.create(
-      file.path(thisScript_path, "Data", "inputs"),
-      recursive = TRUE,
-      showWarnings = FALSE
-    )
-    
-    append_input(
-      df_i,
-      file.path(
-        thisScript_path,
-        "Data",
-        "inputs",
-        paste0(name, ".csv")
-      )
-    )
-    
-  }
-  
-}
 
 
 # append_iteration_results <- function(data_dir = file.path(getwd(), "Data")) {

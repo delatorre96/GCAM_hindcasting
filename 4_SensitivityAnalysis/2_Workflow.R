@@ -1,29 +1,27 @@
 thisScript_path <- "C:/GCAM/Nacho/Hindcasting/4_SensitivityAnalysis"
-source('Functions.R')
-##get all paths from gcam folder
-gcam_path <- "C:/GCAM/Nacho/gcam_europe"
-set_gcam_paths(gcam_path)
-setwd(dir_gcamdata)
-devtools::load_all()
+source('1_2_Functions.R')
+set_gcam_paths('C:/GCAM/Nacho/gcam_europe')
 set.seed(1234)
 
 n_iterations <- 100
-integer_exponent = TRUE
-relative_uncertainty = 0.6
-
-#logit.type <- c('absolute-cost-logit','relative-cost-logit', NA)
-
-logit_EUR_files <- c(#'gcam-europe/A44.subsector_logit_EUR',
-                     'gcam-europe/A23.elecS_subsector_logit'
-                     #'gcam-europe/A42.subsector_logit_EUR'
-                     )
+relative_uncertainty = 0.3
+xml_file <- paste0(dir_xml,"/en_supply_EUR.xml")
+xml_file_cal <- paste0(dir_xml,"/en_supply_EUR_cal.xml")
 
 for (i in 1:n_iterations){
-  change_csvs(logit_EUR_files,
-              relative_uncertainty,
-              integer_exponent)
   
-  driver_drake()
+  tabla_logits <- extraer_logits(xml_file)
+  tabla_logits$year <- 2021
+  
+  #tabla_logits$logit <- round(tabla_logits$logit * runif(nrow(tabla_logits),1 - relative_uncertainty,1 + relative_uncertainty),2)
+  
+  factor <- runif(1,
+                  1 - relative_uncertainty,
+                  1 + relative_uncertainty)
+   
+  tabla_logits$logit <-  round(tabla_logits$logit * factor,2)
+  
+  insertar_logits(xml_file,tabla_logits, xml_file_cal)
 
   run_gcam(run_gcam_file)
 
@@ -41,10 +39,9 @@ for (i in 1:n_iterations){
   )
   
   if (ok) {
-    append_iteration_inputs(logit_EUR_files)
+    append_input(tabla_logits, file.path(thisScript_path,"Data", "inputs",'en_supply_EUR.csv'))
   }
   
   delete_iteration_csvs()
-  
-  setwd(dir_gcamdata)
+ 
 }

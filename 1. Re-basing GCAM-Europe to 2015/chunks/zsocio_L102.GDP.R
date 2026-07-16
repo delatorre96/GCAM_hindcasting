@@ -53,7 +53,7 @@ module_socio_L102.GDP <- function(command, ...) {
     # Load required inputs ----
     get_data_list(all_data, MODULE_INPUTS, strip_attributes = TRUE)
 
-
+    L100.Pop_thous_ctry_Yh <- L100.Pop_thous_ctry_Yh %>% filter(year <= MODEL_FINAL_BASE_YEAR)
 
     # 1. Stitch GDP projections to historical values  ----
     ## Step 1: Get historical GDP data & mapping ready ----
