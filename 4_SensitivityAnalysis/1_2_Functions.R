@@ -9,13 +9,15 @@ set_gcam_paths <- function(gcam_path) {
   #dir_gcamdata <- "C:/Users/ignacio.delatorre/Documents/Understanding GCAM/gcam-core/input/gcamdata"
   dir_gcam <<- gcam_path
   config_file <<-  paste0(gcam_path,'/exe/configuration.xml')
+  exe_dir <<- paste0(gcam_path,'/exe')
   run_gcam_file <<- paste0(gcam_path,'/exe/run-gcam.bat')
+  run_gcam_file_cal <<- paste0(gcam_path,'/exe/run-gcam_cal.bat')
   dir_gcamdata <<- paste0(gcam_path,'/input/gcamdata')
   dir_xml <<- paste0(gcam_path,'/input/gcamdata/xml')
-
   print(dir_gcam)
   print(config_file)
   print(run_gcam_file)
+  print(run_gcam_file_cal)
   print(dir_gcamdata)
   print(dir_xml)
 }
@@ -195,48 +197,44 @@ extraer_logits_anyXML<- function(xml_file){
 
 
 
-
 insertar_logits <- function(xml_entrada,
                             tabla_logits,
                             xml_salida){
   
-  library(xml2)
-  
   doc <- read_xml(xml_entrada)
   
-  for(i in seq_len(nrow(tabla_logits))){
+  # Convertir una sola vez
+  logit_chr   <- as.character(tabla_logits$logit)
+  fillout_chr <- as.character(tabla_logits$fillout)
+  year_chr    <- as.character(tabla_logits$year)
+  xpath       <- tabla_logits$xpath
+  
+  n <- length(xpath)
+  
+  for(i in seq_len(n)){
     
-    nodo <- xml_find_first(doc,
-                           tabla_logits$xpath[i])
+    nodo <- xml_find_first(doc, xpath[i])
     
-    if(inherits(nodo,"xml_missing"))
-      next
-    
-    nuevo <- xml_add_sibling(
-      nodo,
-      "logit-exponent",
-      .where="after",
-      as.character(tabla_logits$logit[i])
-    )
-    
-    xml_set_attr(
-      nuevo,
-      "fillout",
-      as.character(tabla_logits$fillout[i])
-    )
-    
-    xml_set_attr(
-      nuevo,
-      "year",
-      as.character(tabla_logits$year[i])
-    )
-    
+    if (!inherits(nodo, "xml_missing")) {
+      
+      nuevo <- xml_add_sibling(
+        nodo,
+        "logit-exponent",
+        .where = "after",
+        .value = logit_chr[i]
+      )
+      
+      xml_set_attrs(
+        nuevo,
+        c(
+          fillout = fillout_chr[i],
+          year    = year_chr[i]
+        )
+      )
+    }
   }
   
-  write_xml(doc,
-            xml_salida,
-            options="format")
-  
+  write_xml(doc, xml_salida, options = "format")
 }
 
 
@@ -470,6 +468,8 @@ append_iteration_results <- function(data_dir = file.path(getwd(), "Data")) {
       }
     }
     
+    df <- df %>% 
+      select('region', 'sector', 'subsector', 'output', 'technology', '2021')
     df$iteration <- iteration
     
     write.table(
@@ -501,4 +501,35 @@ delete_iteration_csvs <- function(data_dir = file.path(getwd(), "Data")) {
   
   invisible(NULL)
 }
+
+
+
+
+change_config <- function(df_logits, exe_dir, config_file){
+  config <- read_xml(config_file)
+  
+  archivos_modificar <- unique(df_logits$xml_file)
+  
+  # Todos los nodos <Value> de ScenarioComponents
+  nodos <- xml_find_all(config, ".//ScenarioComponents/Value")
+  
+  for (nodo in nodos) {
+    
+    ruta <- xml_text(nodo)
+    archivo <- basename(ruta)
+    
+    if (archivo %in% archivos_modificar) {
+      
+      ruta_nueva <- sub("\\.xml$", "_cal.xml", ruta)
+      
+      xml_text(nodo) <- ruta_nueva
+    }
+  }
+  
+  # Guardar con el nombre que quieras
+  write_xml(config, paste0(exe_dir,"/configuration_cal.xml"))
+}
+
+
+
 
