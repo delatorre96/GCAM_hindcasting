@@ -196,49 +196,35 @@ extraer_logits_anyXML<- function(xml_file){
 
 
 
-
 insertar_logits <- function(xml_entrada,
                             tabla_logits,
                             xml_salida){
   
   doc <- read_xml(xml_entrada)
   
-  # Convertir una sola vez
-  logit_chr   <- as.character(tabla_logits$logit)
-  fillout_chr <- as.character(tabla_logits$fillout)
-  year_chr    <- as.character(tabla_logits$year)
-  xpath       <- tabla_logits$xpath
-  
-  n <- length(xpath)
-  
-  for(i in seq_len(n)){
+  for(i in seq_len(nrow(tabla_logits))){
     
-    nodo <- xml_find_first(doc, xpath[i])
+    nodo <- xml_find_first(doc, tabla_logits$xpath[i])
     
-    if (!inherits(nodo, "xml_missing")) {
+    if(!inherits(nodo, "xml_missing")){
       
-      nuevo <- xml_add_sibling(
-        nodo,
-        "logit-exponent",
-        .where = "after",
-        .value = logit_chr[i]
-      )
+      # Crear el nuevo nodo
+      nuevo <- read_xml(sprintf(
+        '<logit-exponent fillout="%s" year="%s">%s</logit-exponent>',
+        tabla_logits$fillout[i],
+        tabla_logits$year[i],
+        tabla_logits$logit[i]
+      ))
       
-      xml_set_attrs(
-        nuevo,
-        c(
-          fillout = fillout_chr[i],
-          year    = year_chr[i]
-        )
-      )
+      # Insertarlo después del logit existente
+      xml_add_sibling(nodo, nuevo, .where = "after")
     }
   }
   
   write_xml(doc, xml_salida, options = "format")
 }
 
-
-
+36000/1410
 
 
 run_gcam <- function(bat_path) {
@@ -286,6 +272,39 @@ append_input <- function(df, output_file) {
     na = ""
   )
 }
+
+
+
+append_log <- function(df, output_file) {
+
+  # Calcular la iteración
+  if (!file.exists(output_file)) {
+    
+    iteration <- 1
+    
+  } else {
+    
+    old <- read.csv(output_file, check.names = FALSE)
+    iteration <- max(old$iteration, na.rm = TRUE) + 1
+  }
+  
+  # Añadir columna
+  df$iteration <- iteration
+  
+  # Escribir
+  write.table(
+    df,
+    file = output_file,
+    sep = ",",
+    row.names = FALSE,
+    col.names = !file.exists(output_file),
+    append = file.exists(output_file),
+    quote = FALSE,
+    na = ""
+  )
+}
+
+
 
 
 

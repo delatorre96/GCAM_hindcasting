@@ -33,17 +33,17 @@ if (!file.exists('df_logits.csv')) {
   }
   
   df_logits <- bind_rows(tablas_logits) %>%
-    mutate(destination_file = sub("\\.xml$", "_cal.xml", xml_file))
+    mutate(destination_file = sub("\\.xml$", "_cal.xml", xml_file)) %>% filter(xml_file != 'building_det_EUR.xml')
   
   write.csv(df_logits, 'df_logits.csv', row.names = FALSE)
 }else{
   message('df_logits already created. Loading logits....')
-  df_logits <- read.csv('df_logits.csv')
+  df_logits <- read.csv('df_logits.csv') %>% select(-id) %>% filter(xml_file != 'building_det_EUR.xml')
 }
 
 change_config(df_logits, exe_dir, config_file)
 
-n_iterations <- 50
+n_iterations <- 200
 #relative_uncertainty = 0.3
 plan(multisession, workers = 16)
 
@@ -58,8 +58,8 @@ simulation_log <- data.frame(
   relative_uncertainty = numeric()
 )
 
-for (relative_uncertainty in c(0.2, 0.3, 0.5, 0.6)){
-  for (i in 1:n_iterations){
+for (i in 1:n_iterations){
+  relative_uncertainty <- round(runif(1,0.1,0.6),1)
     message(paste0('#################################### ITERATION ', i,' ####################################'))
     message('Inducing uncertainty in the parameters...')
     t1 <- Sys.time()
@@ -73,36 +73,33 @@ for (relative_uncertainty in c(0.2, 0.3, 0.5, 0.6)){
     df_logits_copy$year  <- 2021
     df_logits_copy$logit <- round(df_logits_copy$logit * factor, 2)
     
-    df_split <- split(df_logits_copy, df_logits_copy$xml_file)
+    xml_files_set <- unique(df_logits_copy$xml_file)
     
-    resultado <- future_lapply(names(df_split), function(xml_file){
+    for (xml_i in xml_files_set){
+      message(paste0('Processing ',xml_i,'...'))
+      df_logit_i <- df_logits_copy[df_logits_copy$xml_file == xml_i, ]
+      xml_file_path <- paste0(dir_xml, '/', unique(df_logit_i$xml_file))
+      xml_file_cal  <- paste0(dir_xml,'/',unique(df_logit_i$destination_file))
       
-      tabla_logits <- df_split[[xml_file]]
-      
-      xml_file_path <- file.path(dir_xml, xml_file)
-      xml_file_cal  <- file.path(dir_xml, tabla_logits$destination_file[1])
-      
-      tabla_logits$xml_file <- NULL
-      tabla_logits$destination_file <- NULL
+      df_logit_i$xml_file <- NULL
+      df_logit_i$destination_file <- NULL
       
       insertar_logits(
         xml_file_path,
-        tabla_logits,
+        df_logit_i,
         xml_file_cal
-      )
+      ) 
       
-      tabla_logits
-    })
+    }
     
-    df_logits_with_uncer <-
-      bind_rows(resultado) |>
-      select(region, supplysector, subsector, logit)
     t2 <- Sys.time()
     
     run_gcam(run_gcam_file_cal)
     
     message('Saving results....')
   
+    df_logits_copy <- df_logits_copy %>%
+      select(region, supplysector, subsector, logit)
     
     ok <- tryCatch(
       {
@@ -116,7 +113,7 @@ for (relative_uncertainty in c(0.2, 0.3, 0.5, 0.6)){
     )
     
     if (ok) {
-      append_input(df_logits_with_uncer, file.path("Data", "inputs",'df_logits.csv'))
+      append_input(df_logits_copy, file.path("Data", "inputs",'df_logits.csv'))
     }
     
     delete_iteration_csvs()
@@ -141,7 +138,6 @@ for (relative_uncertainty in c(0.2, 0.3, 0.5, 0.6)){
     )
     
   }
-}
 
 
 
