@@ -88,7 +88,8 @@ variation_iter <- outputs_error %>%
           "sd", "cv", "min", "max", "range")
 
 
-## what dimension variates more
+## what dimension variates more 
+### Normalizar
 variation_reg <- variation_iter %>%
   group_by(region) %>%
   summarise(mean_dim = mean(mean),

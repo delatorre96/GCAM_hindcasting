@@ -46,6 +46,15 @@ get_xmls_with_logit <- function(xml_files, xml_dir) {
   }, xml_files)
 }
 
+get_xmls_with_param <- function(xml_files, xml_dir, param) {
+  Filter(function(f) {
+    doc <- read_xml(file.path(xml_dir, f))
+    length(xml_find_all(doc, paste0(".//", param))) > 0
+  }, xml_files)
+}
+
+
+
 
 extraer_logits <- function(xml_file){
   
@@ -140,6 +149,7 @@ extraer_logits_anyXML<- function(xml_file){
     region <- NA
     supplysector <- NA
     subsector <- NA
+    nesting_subsector  <- NA
     level <- NA
     
     for(p in padres){
@@ -159,6 +169,10 @@ extraer_logits_anyXML<- function(xml_file){
         subsector <- xml_attr(p,"name")
         level <- "subsector"
       }
+      if(etiqueta == "nesting-subsector"){
+        nesting_subsector <- xml_attr(p,"name")
+        level <- "nesting-subsector"
+      }
       
     }
     
@@ -175,6 +189,8 @@ extraer_logits_anyXML<- function(xml_file){
       subsector = subsector,
       
       level = level,
+      
+      nesting_subsector = nesting_subsector,
       
       fillout = xml_attr(logit,"fillout"),
       
@@ -290,6 +306,9 @@ append_log <- function(df, output_file) {
   
   # Añadir columna
   df$iteration <- iteration
+  
+  # Poner iteration como primera columna
+  df <- df[, c("iteration", setdiff(names(df), "iteration"))]
   
   # Escribir
   write.table(
@@ -549,6 +568,36 @@ change_config <- function(df_logits, exe_dir, config_file){
   write_xml(config, paste0(exe_dir,"/configuration_cal.xml"))
 }
 
+
+createDF_params <- function(xml_files, regions, interested_subsectors = NA, interested_sectors = NA){
+  tablas_logits <- list()
+  
+  for (xml_file in xmls_with_logit_EUR) {
+    message(paste0('extracting logits from ', xml_file))
+    xml_file_path <- file.path(dir_xml, xml_file)
+    
+    tabla_logits <- extraer_logits_anyXML(xml_file_path) %>% 
+      filter(region %in% regions)
+    
+    if (!(length(interested_subsectors) == 1 && is.na(interested_subsectors)) &&
+        !(length(interested_sectors) == 1 && is.na(interested_sectors))) {
+      tabla_logits <- tabla_logits %>%
+        filter(
+          subsector    %in% interested_subsectors |
+            supplysector %in% interested_sectors
+        )
+    }
+    if (nrow(tabla_logits) > 0) {
+      tablas_logits[[xml_file]] <- tabla_logits
+    }
+  }
+  
+  df_params <- bind_rows(tablas_logits) %>%
+    mutate(destination_file = sub("\\.xml$", "_cal.xml", xml_file)) #%>% filter(xml_file != 'building_det_EUR.xml')
+  
+  write.csv(df_params, 'df_params.csv', row.names = FALSE)
+  return(df_params)
+}
 
 
 
