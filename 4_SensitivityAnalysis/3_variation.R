@@ -1,8 +1,12 @@
 library(dplyr)
 library(tidyr)
+library(readr)
 
 #simulation data
-sim <- read.csv('simulation_log.csv')
+sim <- read_csv('simulation_log.csv',
+                col_types = cols(
+                  run_id = col_character()
+                ))
 
 #Reference
 all_errors_output_by_tech <- read.csv('../2. Extraction/Data/all_errors_output_by_tech.csv')  %>%
@@ -10,19 +14,31 @@ all_errors_output_by_tech <- read.csv('../2. Extraction/Data/all_errors_output_b
   select(-query, -year, -rel_error, -value_chY, -error, -abs_error)
 
 #inputs
-df_logits <- read.csv('Data/inputs/df_logits.csv') %>%
+df_params <- read_csv(
+  "Data/inputs/df_params.csv",
+  col_types = cols(
+    run_id = col_character()
+  )
+) %>%
   pivot_wider(
-    id_cols = c(region, supplysector, subsector),
-    names_from = iteration,
+    id_cols = c(region, supplysector, subsector, nesting_subsector),
+    names_from = run_id,
     values_from = logit,
-    names_prefix = "iter_"
+    values_fn = dplyr::first
   )
 
 
-#outputs
-outputs_costs <- read.csv('Data/outputs_by_tech.csv')  
 
-outputs_costs_wider <- outputs_costs %>%
+
+#outputs
+outputs_by_tech <- read.csv('Data/outputs_by_tech.csv')  
+
+
+
+
+
+
+outputs_by_tech_wider <- outputs_by_tech %>%
   pivot_wider(
     id_cols = c(region, sector, subsector, output, technology),
     names_from = iteration,
@@ -30,7 +46,7 @@ outputs_costs_wider <- outputs_costs %>%
     names_prefix = "iter_"
   )
 
-metrics <- outputs_costs_wider %>%
+metrics <- outputs_by_tech_wider %>%
   left_join(
     all_errors_output_by_tech,
     by = c("region", "technology", "subsector", "output", "sector")
@@ -61,7 +77,7 @@ iters_remove <- rmse_outliers$iteration
 
 
 #Calculate error each iter
-outputs_error <- outputs_costs_wider %>%
+outputs_error <- outputs_by_tech_wider %>%
   left_join(all_errors_output_by_tech, by = c("region", "technology", "subsector", "output", "sector")) %>%
   mutate(
     abs(across(starts_with("iter_"), ~ (value_ref - .x)/ value_ref))

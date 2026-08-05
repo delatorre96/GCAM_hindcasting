@@ -14,12 +14,15 @@ set_gcam_paths <- function(gcam_path) {
   run_gcam_file_cal <<- paste0(gcam_path,'/exe/run-gcam_cal.bat')
   dir_gcamdata <<- paste0(gcam_path,'/input/gcamdata')
   dir_xml <<- paste0(gcam_path,'/input/gcamdata/xml')
+  log_gcam <<- paste0(gcam_path,'/exe/logs/main_log.txt')
+  
   print(dir_gcam)
   print(config_file)
   print(run_gcam_file)
   print(run_gcam_file_cal)
   print(dir_gcamdata)
   print(dir_xml)
+  print(log_gcam)
 }
 
 get_xml_files <- function(config_path) {
@@ -46,6 +49,8 @@ get_xmls_with_logit <- function(xml_files, xml_dir) {
   }, xml_files)
 }
 
+
+
 get_xmls_with_param <- function(xml_files, xml_dir, param) {
   Filter(function(f) {
     doc <- read_xml(file.path(xml_dir, f))
@@ -55,77 +60,85 @@ get_xmls_with_param <- function(xml_files, xml_dir, param) {
 
 
 
-
-extraer_logits <- function(xml_file){
+extraer_params <- function(xml_file, param){
   
   library(xml2)
   
   doc <- read_xml(xml_file)
   
-  logits <- xml_find_all(doc, ".//logit-exponent")
-  
-  salida <- vector("list", length(logits))
-  
-  for(i in seq_along(logits)){
+    logits <- xml_find_all(doc, paste0(".//", param))
     
-    logit <- logits[[i]]
+    salida <- vector("list", length(logits))
     
-    padres <- xml_parents(logit)
-    
-    region <- NA
-    supplysector <- NA
-    subsector <- NA
-    level <- NA
-    
-    for(p in padres){
+    for(i in seq_along(logits)){
       
-      etiqueta <- xml_name(p)
+      logit <- logits[[i]]
       
-      if(etiqueta == "region"){
-        region <- xml_attr(p, "name")
+      padres <- xml_parents(logit)
+      
+      region <- NA
+      supplysector <- NA
+      energy_final_demand <- NA
+      subsector <- NA
+      level <- NA
+      
+      for(p in padres){
+        
+        etiqueta <- xml_name(p)
+        
+        if(etiqueta == "region"){
+          region <- xml_attr(p, "name")
+        }
+        
+        if (etiqueta == "energy-final-demand"){
+          energy_final_demand <- xml_attr(p, "name")
+          level <- "energy-final-demand"
+        }
+        if(etiqueta == "supplysector"){
+          supplysector <- xml_attr(p, "name")
+          level <- "supplysector"
+        }
+        
+        if(etiqueta == "subsector"){
+          subsector <- xml_attr(p, "name")
+          level <- "subsector"
+        }
+        
       }
       
-      if(etiqueta == "supplysector"){
-        supplysector <- xml_attr(p, "name")
-        level <- "supplysector"
-      }
-      
-      if(etiqueta == "subsector"){
-        subsector <- xml_attr(p, "name")
-        level <- "subsector"
-      }
+      salida[[i]] <- data.frame(
+        
+        id = i,
+        
+        region = region,
+        
+        energy_final_demand = energy_final_demand,
+        
+        supplysector = supplysector,
+        
+        subsector = subsector,
+        
+        level = level,
+        
+        fillout = xml_attr(logit,"fillout"),
+        
+        year = as.numeric(xml_attr(logit,"year")),
+        
+        logit = as.numeric(xml_text(logit)),
+        
+        xpath = xml_path(logit),
+        
+        stringsAsFactors = FALSE
+        
+      )
       
     }
     
-    salida[[i]] <- data.frame(
-      
-      id = i,
-      
-      region = region,
-      
-      supplysector = supplysector,
-      
-      subsector = subsector,
-      
-      level = level,
-      
-      fillout = xml_attr(logit,"fillout"),
-      
-      year = as.numeric(xml_attr(logit,"year")),
-      
-      logit = as.numeric(xml_text(logit)),
-      
-      xpath = xml_path(logit),
-      
-      stringsAsFactors = FALSE
-      
-    )
-    
-  }
-  
-  do.call(rbind, salida)
+    do.call(rbind, salida)
   
 }
+
+
 
 
 
@@ -240,7 +253,87 @@ insertar_logits <- function(xml_entrada,
   write_xml(doc, xml_salida, options = "format")
 }
 
-36000/1410
+
+
+change_config <- function(df_logits, exe_dir, config_file){
+  config <- read_xml(config_file)
+  
+  archivos_modificar <- unique(df_logits$xml_file)
+  
+  # Todos los nodos <Value> de ScenarioComponents
+  nodos <- xml_find_all(config, ".//ScenarioComponents/Value")
+  
+  for (nodo in nodos) {
+    
+    ruta <- xml_text(nodo)
+    archivo <- basename(ruta)
+    
+    if (archivo %in% archivos_modificar) {
+      
+      ruta_nueva <- sub("\\.xml$", "_cal.xml", ruta)
+      
+      xml_text(nodo) <- ruta_nueva
+    }
+  }
+  
+  # Guardar con el nombre que quieras
+  write_xml(config, paste0(exe_dir,"/configuration_cal.xml"))
+}
+
+
+createDF_params <- function(xml_files, regions, interested_subsectors = NA, interested_sectors = NA){
+  tablas_logits <- list()
+  
+  for (xml_file in xml_files) {
+    message(paste0('extracting logits from ', xml_file))
+    xml_file_path <- file.path(dir_xml, xml_file)
+    
+    tabla_logits <- extraer_logits_anyXML(xml_file_path) %>% 
+      filter(region %in% regions)
+    
+    if (!(length(interested_subsectors) == 1 && is.na(interested_subsectors)) &&
+        !(length(interested_sectors) == 1 && is.na(interested_sectors))) {
+      tabla_logits <- tabla_logits %>%
+        filter(
+          subsector    %in% interested_subsectors |
+            supplysector %in% interested_sectors
+        )
+    }
+    if (nrow(tabla_logits) > 0) {
+      tablas_logits[[xml_file]] <- tabla_logits
+    }
+  }
+  
+  df_params <- bind_rows(tablas_logits) %>%
+    mutate(destination_file = sub("\\.xml$", "_cal.xml", xml_file)) #%>% filter(xml_file != 'building_det_EUR.xml')
+  
+  write.csv(df_params, 'df_params.csv', row.names = FALSE)
+  return(df_params)
+}
+
+
+createDF_otherParams <- function(xml_files, regions, interested_subsectors = NA, interested_sectors = NA, param){
+  tablas_logits <- list()
+  
+  for (xml_file in xml_files) {
+    message(paste0('extracting logits from ', xml_file))
+    xml_file_path <- file.path(dir_xml, xml_file)
+    
+    tabla_logits <- extraer_params(xml_file_path, param) %>% 
+      filter(region %in% regions)
+    
+    if (nrow(tabla_logits) > 0) {
+      tablas_logits[[xml_file]] <- tabla_logits
+    }
+  }
+  
+  df_params <- bind_rows(tablas_logits) %>%
+    mutate(destination_file = sub("\\.xml$", "_cal.xml", xml_file)) #%>% filter(xml_file != 'building_det_EUR.xml')
+  
+  write.csv(df_params, 'df_otherParams.csv', row.names = FALSE)
+  return(df_params)
+}
+
 
 
 run_gcam <- function(bat_path) {
@@ -256,25 +349,15 @@ run_gcam <- function(bat_path) {
 
 
 
-append_input <- function(df, output_file) {
+append_input <- function(df, output_file, run_id) {
   dir.create(
     file.path(thisScript_path, "Data", "inputs"),
     recursive = TRUE,
     showWarnings = FALSE
   )
-  # Calcular la iteración
-  if (!file.exists(output_file)) {
-    
-    iteration <- 1
-    
-  } else {
-    
-    old <- read.csv(output_file, check.names = FALSE)
-    iteration <- max(old$iteration, na.rm = TRUE) + 1
-  }
   
   # Añadir columna
-  df$iteration <- iteration
+  df$run_id <- run_id
   
   # Escribir
   write.table(
@@ -291,24 +374,10 @@ append_input <- function(df, output_file) {
 
 
 
-append_log <- function(df, output_file) {
-
-  # Calcular la iteración
-  if (!file.exists(output_file)) {
-    
-    iteration <- 1
-    
-  } else {
-    
-    old <- read.csv(output_file, check.names = FALSE)
-    iteration <- max(old$iteration, na.rm = TRUE) + 1
-  }
+append_log <- function(df, output_file, run_id) {
   
-  # Añadir columna
-  df$iteration <- iteration
+  df$run_id <- run_id
   
-  # Poner iteration como primera columna
-  df <- df[, c("iteration", setdiff(names(df), "iteration"))]
   
   # Escribir
   write.table(
@@ -325,91 +394,7 @@ append_log <- function(df, output_file) {
 
 
 
-
-
-
-# append_iteration_results <- function(data_dir = file.path(getwd(), "Data")) {
-#   
-#   source_files <- list.files(
-#     data_dir,
-#     pattern = "0\\.csv$",
-#     full.names = TRUE
-#   )
-#   
-#   ## Leer y validar todos los archivos primero
-#   dfs <- vector("list", length(source_files))
-#   
-#   for (i in seq_along(source_files)) {
-#     
-#     source_file <- source_files[i]
-#     
-#     lines <- readLines(source_file, warn = FALSE)
-#     
-#     if (length(lines) < 2 ||
-#         grepl("had error", lines[1], ignore.case = TRUE)) {
-#       
-#       stop(
-#         sprintf(
-#           "GCAM produjo un resultado inválido en '%s'. No se guardará esta iteración.",
-#           basename(source_file)
-#         )
-#       )
-#     }
-#     
-#     df <- read.csv(
-#       source_file,
-#       check.names = FALSE,
-#       skip = 1
-#     )
-#     
-#     df <- df[, colSums(!is.na(df)) > 0, drop = FALSE]
-#     
-#     if (nrow(df) == 0) {
-#       stop(
-#         sprintf(
-#           "La consulta '%s' no devolvió filas. No se guardará esta iteración.",
-#           basename(source_file)
-#         )
-#       )
-#     }
-#     
-#     dfs[[i]] <- df
-#   }
-#   
-#   ## Si hemos llegado aquí, todos los archivos son válidos
-#   
-#   for (i in seq_along(source_files)) {
-#     
-#     source_file <- source_files[i]
-#     df <- dfs[[i]]
-#     
-#     target_file <- sub("0\\.csv$", ".csv", source_file)
-#     
-#     if (!file.exists(target_file)) {
-#       iteration <- 1
-#     } else {
-#       old <- read.csv(target_file, check.names = FALSE)
-#       iteration <- max(old$iteration, na.rm = TRUE) + 1
-#     }
-#     
-#     df$iteration <- iteration
-#     
-#     write.table(
-#       df,
-#       file = target_file,
-#       sep = ",",
-#       row.names = FALSE,
-#       col.names = !file.exists(target_file),
-#       append = file.exists(target_file),
-#       quote = TRUE
-#     )
-#   }
-#   
-#   invisible(TRUE)
-# }
-
-
-append_iteration_results <- function(data_dir = file.path(getwd(), "Data")) {
+append_iteration_results <- function(data_dir = file.path(getwd(), "Data"), run_id) {
   
   source_files <- list.files(
     data_dir,
@@ -464,10 +449,10 @@ append_iteration_results <- function(data_dir = file.path(getwd(), "Data")) {
     }
     
     ## Eliminar columnas completamente vacías
-    df <- df[, colSums(!is.na(df)) > 0, drop = FALSE]
+    df_vacio <- df[, colSums(!is.na(df)) > 0, drop = FALSE]
     
     ## Si no hay datos, pasar al siguiente archivo
-    if (nrow(df) == 0) {
+    if (nrow(df_vacio) == 0) {
       
       warning(
         sprintf(
@@ -481,34 +466,11 @@ append_iteration_results <- function(data_dir = file.path(getwd(), "Data")) {
     }
     
     target_file <- sub("0\\.csv$", ".csv", source_file)
+    df$run_id <- run_id
     
-    if (!file.exists(target_file)) {
-      
-      iteration <- 1
-      
-    } else {
-      
-      old <- tryCatch(
-        read.csv(target_file, check.names = FALSE),
-        error = function(e) NULL
-      )
-      
-      if (is.null(old) ||
-          !"iteration" %in% names(old) ||
-          nrow(old) == 0) {
-        
-        iteration <- 1
-        
-      } else {
-        
-        iteration <- max(old$iteration, na.rm = TRUE) + 1
-        
-      }
-    }
+    df <- df[c('region', 'sector', 'subsector', 'output', 'technology', '2021','run_id')]
     
-    df <- df %>% 
-      select('region', 'sector', 'subsector', 'output', 'technology', '2021')
-    df$iteration <- iteration
+   
     
     write.table(
       df,
@@ -540,64 +502,6 @@ delete_iteration_csvs <- function(data_dir = file.path(getwd(), "Data")) {
   invisible(NULL)
 }
 
-
-
-
-change_config <- function(df_logits, exe_dir, config_file){
-  config <- read_xml(config_file)
-  
-  archivos_modificar <- unique(df_logits$xml_file)
-  
-  # Todos los nodos <Value> de ScenarioComponents
-  nodos <- xml_find_all(config, ".//ScenarioComponents/Value")
-  
-  for (nodo in nodos) {
-    
-    ruta <- xml_text(nodo)
-    archivo <- basename(ruta)
-    
-    if (archivo %in% archivos_modificar) {
-      
-      ruta_nueva <- sub("\\.xml$", "_cal.xml", ruta)
-      
-      xml_text(nodo) <- ruta_nueva
-    }
-  }
-  
-  # Guardar con el nombre que quieras
-  write_xml(config, paste0(exe_dir,"/configuration_cal.xml"))
-}
-
-
-createDF_params <- function(xml_files, regions, interested_subsectors = NA, interested_sectors = NA){
-  tablas_logits <- list()
-  
-  for (xml_file in xmls_with_logit_EUR) {
-    message(paste0('extracting logits from ', xml_file))
-    xml_file_path <- file.path(dir_xml, xml_file)
-    
-    tabla_logits <- extraer_logits_anyXML(xml_file_path) %>% 
-      filter(region %in% regions)
-    
-    if (!(length(interested_subsectors) == 1 && is.na(interested_subsectors)) &&
-        !(length(interested_sectors) == 1 && is.na(interested_sectors))) {
-      tabla_logits <- tabla_logits %>%
-        filter(
-          subsector    %in% interested_subsectors |
-            supplysector %in% interested_sectors
-        )
-    }
-    if (nrow(tabla_logits) > 0) {
-      tablas_logits[[xml_file]] <- tabla_logits
-    }
-  }
-  
-  df_params <- bind_rows(tablas_logits) %>%
-    mutate(destination_file = sub("\\.xml$", "_cal.xml", xml_file)) #%>% filter(xml_file != 'building_det_EUR.xml')
-  
-  write.csv(df_params, 'df_params.csv', row.names = FALSE)
-  return(df_params)
-}
 
 
 
