@@ -11,7 +11,6 @@ con <- dbConnect(
 
 #See interested experiments:
 experiments <- dbReadTable(con, "Experiments")
-experiment_id <- "EXP_5a2e3191"
 
 runs <- dbReadTable(con, "Runs")
 
