@@ -245,34 +245,127 @@ cat("MAE test      :", round(MAE_test_95, 4), "\n")
 
 
 ########  Interpretar Gradient Boosting ######## 
-library(SHAPforxgboost)
-library(pdp)
+library(DALEX)
+
+X_train_95_df <- as.data.frame(X_train_95)
+X_test_95_df  <- as.data.frame(X_test_95)
+
+explainer_95 <- explain(
+  model = model_95,
+  data = X_train_95_df,
+  y = y_train,
+  predict_function = function(model, newdata) {
+    predict(
+      model,
+      as.matrix(newdata)
+    )
+  },
+  label = "Gradient Boosting - PCs 95%",
+  verbose = FALSE
+)
 
 
+profile_PC1 <- model_profile(
+  explainer_95,
+  variables = "PC1",
+  N = 50
+)
+
+plot(profile_PC1)
+
+profile_all <- model_profile(
+  explainer_95,
+  variables = pcs_95,
+  N = 50
+)
+
+plot(profile_all)
+
+##SHAP 
+obs_1 <- X_test_95_df[1, , drop = FALSE]
+
+shap_1 <- predict_parts(
+  explainer_95,
+  new_observation = obs_1,
+  type = "shap",
+  B = 50
+)
+plot(shap_1)
+
+####
+idx_low_sample <- sample(
+  idx_low,
+  min(30, length(idx_low))
+)
+
+idx_high_sample <- sample(
+  idx_high,
+  min(30, length(idx_high))
+)
 
 
+get_shap <- function(indices, explainer, data) {
+  
+  resultado <- lapply(
+    indices,
+    function(i) {
+      
+      s <- predict_parts(
+        explainer,
+        new_observation = data[i, , drop = FALSE],
+        type = "shap",
+        B = 50
+      )
+      
+      s %>%
+        filter(
+          variable != "_baseline_"
+        ) %>%
+        select(
+          variable,
+          contribution
+        )
+    }
+  )
+  
+  bind_rows(resultado)
+}
 
+shap_low_df <- get_shap(
+  idx_low_sample,
+  explainer_95,
+  X_train_95_df
+)
 
+shap_high_df <- get_shap(
+  idx_high_sample,
+  explainer_95,
+  X_train_95_df
+)
 
+summary_low <- shap_low_df %>%
+  group_by(variable) %>%
+  summarise(
+    mean_shap = mean(contribution),
+    mean_abs_shap = mean(abs(contribution)),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(mean_abs_shap))
 
+####### Interacciones
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+grid_PC1_PC4 <- expand.grid(
+  PC1 = seq(
+    min(X_train_95_df$PC1),
+    max(X_train_95_df$PC1),
+    length.out = 40
+  ),
+  PC4 = seq(
+    min(X_train_95_df$PC4),
+    max(X_train_95_df$PC4),
+    length.out = 40
+  )
+)
 
 
 
