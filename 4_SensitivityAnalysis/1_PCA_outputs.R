@@ -40,8 +40,30 @@ all_errors_output_by_tech <- outputs_by_tech %>%
          error = value_ref -`2021`)%>%
   select(-`2021`, -value_ref) 
 
-## id per output
+### Delete run outliers
+#errors per run#
+mean_error_per_run <- all_errors_output_by_tech %>% 
+  group_by(run_id) %>%
+  summarise(MAE = mean(error_abs),
+            RMSE = sqrt(mean(error^2))) %>%
+  mutate(MAE_log = log1p(MAE),
+         RMSE_log = log1p(RMSE))
 
+log1MAE <- mean_error_per_run %>% select(run_id, MAE_log)
+Q1 <- quantile(mean_error_per_run$MAE_log, 0.25, na.rm = TRUE)
+Q3 <- quantile(mean_error_per_run$MAE_log, 0.75, na.rm = TRUE)
+
+IQR_val <- Q3 - Q1
+
+upper_limit <- Q3 +  40*IQR_val
+
+mean_error_per_run <- mean_error_per_run %>%
+  filter(MAE_log <= upper_limit)
+
+all_errors_output_by_tech <- all_errors_output_by_tech %>%
+  filter(run_id %in% mean_error_per_run$run_id)
+
+#####
 
 
 output_keys <- all_errors_output_by_tech %>%
@@ -81,14 +103,14 @@ outputs_wide <- outputs %>%
 # 1. CONTRIBUCIÓN AL ERROR
 
 
-error_per_run <- all_errors_output_by_tech %>% 
+total_error_per_run <- all_errors_output_by_tech %>% 
   group_by(run_id) %>%
   summarise(
     SAE = sum(error_abs),
     .groups = "drop"
   )
 
-contribution_output2error <- error_per_run %>%
+contribution_output2error <- total_error_per_run %>%
   left_join(outputs_wide, by = "run_id") %>%
   mutate(
     across(
@@ -178,7 +200,7 @@ outputs_wide_filtered <- outputs_wide_filtered[
   ,
   -output_cols[cols_remove]
 ]
-
+cat(ncol(outputs_wide), 'variables -> ',ncol(outputs_wide_filtered),'variables' )
 
 
 ###### PCA #####
@@ -205,156 +227,14 @@ cum_var <- cumsum(var_explained)
 
 # Número de componentes necesarios para llegar al 80%
 n_pc <- which(cum_var >= 0.99)[1]
+cat(ncol(outputs_wide_filtered), 'variables -> ',n_pc ,'variables')
 
 pca_scores <- as.data.frame(pca$x[, 1:n_pc])
 
-df_PCA <- cbind(run_id = outputs_wide_filtered$run_id, pca_scores)
+df_PCA <- cbind(run_id = outputs_wide_filtered$run_id, pca_scores) %>% 
+  left_join(mean_error_per_run, by = 'run_id') 
+
 
 write.csv(df_PCA, 'outputs_PCA.csv', row.names = FALSE)
-
-
-
-
-############################## DRAFT ##############################
-
-
-###### Var clustering ######
-
-library(ggplot2)
-library(cluster)
-
-# 1. Preparar los datos
-
-# Eliminamos run_id porque es una variable identificativa
-X <- outputs_wide_filtered %>%
-  select(-run_id) %>%
-  as.matrix()
-
-# Cada fila = un run
-# Cada columna = un output/variable
-
-# Estandarizamos cada variable
-X_scaled <- scale(X)
-
-# Trasponemos para hacer clustering de VARIABLES
-# Cada fila = una variable output_i
-# Cada columna = un run
-X_variables <- t(X_scaled)
-
-### Eliminar variables problemáticas 
-
-# Identificar variables que contienen algún NA/NaN/Inf
-bad_variables <- rownames(X_variables)[
-  !apply(is.finite(X_variables), 1, all)
-]
-
-# Eliminar las variables problemáticas
-X_variables <- X_variables[
-  apply(is.finite(X_variables), 1, all),
-  ,
-  drop = FALSE
-]
-
-cor_pearson <- cor(
-  X_variables,
-  method = "pearson",
-  use = "pairwise.complete.obs"
-)
-
-
-
-# 5. Convertir correlación en distancia
-#    d = 1 - rho
-dist_pearson <- as.dist(1 - abs(cor_pearson))
-
-# 6. Clustering jerárquico aglomerativo
-hc <- hclust(
-  dist_pearson,
-  method = "complete"
-)
-
-# 7. Dendrograma
-plot(
-  hc,
-  main = "Clustering jerárquico de variables",
-  xlab = "Variables",
-  ylab = "Distancia (1 - pearson)",
-  sub = "",
-  cex = 0.5
-)
-
-
-
-
-
-### Clustering kmeans
-mds <- cmdscale(
-  dist_pearson,
-  k = 10,
-  eig = TRUE
-)
-
-X_mds <- mds$points
-## Elboww method
-k_values <- 2:20
-
-wss <- sapply(k_values, function(k) {
-  kmeans(
-    X_mds,
-    centers = k,
-    nstart = 10
-  )$tot.withinss
-})
-
-elbow_df <- data.frame(
-  k = k_values,
-  WSS = wss
-)
-
-ggplot(elbow_df, aes(x = k, y = WSS)) +
-  geom_line() +
-  geom_point() +
-  labs(
-    title = "Método del codo",
-    x = "Número de clusters (k)",
-    y = "Within-cluster sum of squares"
-  ) +
-  theme_minimal()
-
-#silhouette
-sil_width <- sapply(k_values, function(k) {
-  
-  km <- kmeans(
-    X_mds,
-    centers = k,
-    nstart = 10
-  )
-  
-  sil <- silhouette(
-    km$cluster,
-    dist_pearson
-  )
-  
-  mean(sil[, "sil_width"])
-})
-
-sil_df <- data.frame(
-  k = k_values,
-  silhouette = sil_width
-)
-
-ggplot(sil_df, aes(x = k, y = silhouette)) +
-  geom_line() +
-  geom_point() +
-  labs(
-    title = "Ancho medio de silueta",
-    x = "Número de clusters (k)",
-    y = "Silhouette"
-  ) +
-  theme_minimal()
-
-
-
-
 
 
