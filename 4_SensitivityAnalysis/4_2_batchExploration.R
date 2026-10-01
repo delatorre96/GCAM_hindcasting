@@ -1,31 +1,40 @@
-library(xgboost)
+# library(xgboost)
 library(dplyr)
 library(tidyr)
+library(mgcv)
 
-
-df_best_components <- read.csv('df_best_components.csv')
 
 F_model <- readRDS("F_model_GAM.rds")
 #xgb.load("F_model_xgboost.json")
 
-inputsPerParam <- readRDS("gradient_boosting_models.rds")
-
+inputsPerParam <- readRDS("GAM_models.rds")
+#inputsPerParam <- readRDS("gradient_boosting_models.rds")
 
 
 # 1. Modelos de componentes
 
-
+#Para gradient_boosting fueron
+# pc_models <- list(
+#   
+#   PC2 = inputsPerParam$logit$model$PC2,
+#   PC1 = inputsPerParam$logit$model$PC1,
+#   
+#   PC7 = inputsPerParam$satiation_level$model$PC7,
+#   PC6 = inputsPerParam$satiation_level$model$PC6,
+#   PC5 = inputsPerParam$satiation_level$model$PC5
+#   
+# )
+#Para gams
 pc_models <- list(
   
-  PC2 = inputsPerParam$logit$model$PC2,
-  PC1 = inputsPerParam$logit$model$PC1,
+  PC2 = inputsPerParam$price_elasticity$model$PC2,
+  PC1 = inputsPerParam$price_elasticity$model$PC1,
   
   PC7 = inputsPerParam$satiation_level$model$PC7,
   PC6 = inputsPerParam$satiation_level$model$PC6,
   PC5 = inputsPerParam$satiation_level$model$PC5
   
 )
-
 
 
 # 2. Obtener todos los inputs utilizados por los modelos
@@ -55,6 +64,7 @@ cat(
 #
 #   logit            -> [-510, 0]
 #   satiation_level  -> [0, 20]
+#   price_elasticity  -> [-1.40, -27.98]
 #
 # Estos límites definen el espacio inicial sobre el que
 # generaremos la población sintética.
@@ -82,16 +92,16 @@ for (i in seq_len(nrow(input_bounds))) {
   
   
   # ----------------------------------------------------------
-  # Comprobar si el input pertenece al modelo de logits
+  # Comprobar si el input pertenece al modelo de price_elasticity
   # ----------------------------------------------------------
   
   if (input %in% inputs_by_pc$PC2 ||
       input %in% inputs_by_pc$PC1) {
     
-    input_bounds$min[i] <- -1000
+    input_bounds$min[i] <- -10
     input_bounds$max[i] <- 0
     
-    input_bounds$parameter_type[i] <- "logit"
+    input_bounds$parameter_type[i] <- "price_elasticity"
     
   }
   
@@ -106,7 +116,7 @@ for (i in seq_len(nrow(input_bounds))) {
            input %in% inputs_by_pc$PC5) {
     
     input_bounds$min[i] <- 0
-    input_bounds$max[i] <- 40
+    input_bounds$max[i] <- 4
     
     input_bounds$parameter_type[i] <- "satiation_level"
     
@@ -147,11 +157,11 @@ generate_initial_population <- function(n, bounds) {
       seq_len(nrow(bounds)),
       function(i) {
         
-        runif(
+        round(runif(
           n,
           min = bounds$min[i],
           max = bounds$max[i]
-        )
+        ),3)
         
       }
     )
@@ -166,6 +176,78 @@ generate_initial_population <- function(n, bounds) {
 
 # 5. Inputs -> PCs
 
+
+# predict_components <- function(new_inputs, pc_models) {
+#   
+#   predictions <- list()
+#   
+#   for (pc_name in names(pc_models)) {
+#     
+#     info <- pc_models[[pc_name]]
+#     
+#     feature_names <- info$feature_names
+#     model <- info$model
+#     
+#     # --------------------------------------------------------
+#     # Comprobar que todos los inputs necesarios están presentes
+#     # --------------------------------------------------------
+#     
+#     missing_inputs <- setdiff(
+#       feature_names,
+#       names(new_inputs)
+#     )
+#     
+#     if (length(missing_inputs) > 0) {
+#       
+#       stop(
+#         paste(
+#           "El modelo de",
+#           pc_name,
+#           "necesita estos inputs que no están presentes:",
+#           paste(missing_inputs, collapse = ", ")
+#         )
+#       )
+#       
+#     }
+#     
+#     
+#     # --------------------------------------------------------
+#     # Seleccionar exactamente los inputs utilizados
+#     # por este modelo
+#     # --------------------------------------------------------
+#     
+#     df_features <- new_inputs[
+#       ,
+#       feature_names,
+#       drop = FALSE
+#     ]
+#     
+#     
+#     # --------------------------------------------------------
+#     # Crear DMatrix
+#     # --------------------------------------------------------
+#     
+#     dmat <- xgb.DMatrix(
+#       data = as.matrix(df_features)
+#     )
+#     
+#     
+#     # --------------------------------------------------------
+#     # Predicción del componente
+#     # --------------------------------------------------------
+#     
+#     predictions[[pc_name]] <- predict(
+#       model,
+#       dmat
+#     )
+#     
+#   }
+#   
+#   
+#   as.data.frame(predictions)
+#   
+# }
+# 
 
 predict_components <- function(new_inputs, pc_models) {
   
@@ -200,7 +282,6 @@ predict_components <- function(new_inputs, pc_models) {
       
     }
     
-    
     # --------------------------------------------------------
     # Seleccionar exactamente los inputs utilizados
     # por este modelo
@@ -212,33 +293,29 @@ predict_components <- function(new_inputs, pc_models) {
       drop = FALSE
     ]
     
-    
     # --------------------------------------------------------
-    # Crear DMatrix
+    # Asegurar que las variables son numéricas
     # --------------------------------------------------------
     
-    dmat <- xgb.DMatrix(
-      data = as.matrix(df_features)
+    df_features[] <- lapply(
+      df_features,
+      as.numeric
     )
     
-    
     # --------------------------------------------------------
-    # Predicción del componente
+    # Predicción del GAM
     # --------------------------------------------------------
     
     predictions[[pc_name]] <- predict(
       model,
-      dmat
+      newdata = df_features,
+      type = "response"
     )
     
   }
   
-  
   as.data.frame(predictions)
-  
 }
-
-
 
 # 6. PCs -> MAE
 
@@ -402,7 +479,7 @@ predict_mae <- function(pc_predictions, F_model) {
 
 set.seed(123)
 
-n_samples <- 10000000
+n_samples <- 1000000
 
 # Tamaño de cada batch
 batch_size <- 50000
@@ -530,9 +607,7 @@ for (b in seq_len(n_batches)) {
   best_results <- bind_rows(
     best_results,
     results_batch
-  ) %>%
-    arrange(MAE) %>%
-    slice_head(n = top_n)
+  ) 
   
   
   # ----------------------------------------------------------
@@ -546,8 +621,8 @@ for (b in seq_len(n_batches)) {
   )
   
   cat(
-    "MAE mínimo acumulado:",
-    min(best_results$MAE, na.rm = TRUE),
+    "MAE máximo:",
+    max(mae_batch, na.rm = TRUE),
     "\n"
   )
   
@@ -611,6 +686,52 @@ plot(
   xlab = "MAE"
 )
 
+############################
 
-head(results)
+input_keys <- bind_rows(
+  pc_models$PC1$input_keys,
+  pc_models$PC2$input_keys,
+  pc_models$PC5$input_keys,
+  pc_models$PC6$input_keys,
+  pc_models$PC7$input_keys
+) %>%
+  distinct(input_id, .keep_all = TRUE)
+
+
+results_next2zero <- results %>%
+  filter(MAE < 0.001, MAE > - 0.001) %>% select(-PC2, -PC1, -PC7, -PC6, -PC5) 
+
+results_long <- results_next2zero %>%
+  mutate(run_id = rownames(.)) %>%
+  pivot_longer(
+    cols = starts_with("input_"),
+    names_to = "input",
+    values_to = "value"
+  ) %>%
+  mutate(
+    input_id = as.integer(sub("input_", "", input))
+  ) %>%
+  left_join(
+    input_keys,
+    by = "input_id"
+  ) %>% 
+  mutate(
+    param_config = match(run_id, unique(run_id))
+  ) %>% 
+  select(-run_id) %>%
+  mutate(
+    type_of_param = if_else(
+      input_id %in% c(2, 4),
+      "price_elasticity",
+      "satiation_level"
+    ),
+    destination_file = paste0(
+      sub("\\.xml$", "", xml_file),
+      "_cal.xml"
+    )
+  ) %>% mutate(year = 2021) %>%
+  rename(param = value)
+
+
+write.csv(results_long, 'df_params_new_inputs_GAM.csv', row.names = FALSE)
 

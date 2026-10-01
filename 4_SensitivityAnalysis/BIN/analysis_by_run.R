@@ -16,7 +16,7 @@ con <- dbConnect(
 
 #See interested experiments:
 experiments <- dbReadTable(con, "Experiments")
-experiment_id <- 'EXP_2e96286f'
+experiment_id <- 'EXP_844fcd55'
 query_name <- "outputs_by_tech"
 
 
@@ -25,7 +25,7 @@ query_name <- "outputs_by_tech"
 outputs_by_tech <- read_experiment_output(
   con = con,
   query_name = query_name,
-  execution_errors = TRUE,
+  execution_errors = NULL,
   experiment_id
 )
 
