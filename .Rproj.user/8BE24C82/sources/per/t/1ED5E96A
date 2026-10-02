@@ -1,0 +1,26 @@
+{
+    "id": "1ED5E96A",
+    "path": "C:/GCAM/Nacho/Hindcasting/2. Extraction/2. Extraction_outputsByTech.R",
+    "project_path": "2. Extraction/2. Extraction_outputsByTech.R",
+    "type": "r_source",
+    "hash": "3344584216",
+    "contents": "",
+    "dirty": false,
+    "created": 1790862571847.0,
+    "source_on_save": false,
+    "relative_order": 2,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "73,0",
+        "scrollLine": "40"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1790860515,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1790860515,
+    "read_only": false,
+    "read_only_alternatives": []
+}
