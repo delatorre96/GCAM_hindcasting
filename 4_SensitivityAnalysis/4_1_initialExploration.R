@@ -15,14 +15,17 @@ inputsPerParam <- readRDS("gradient_boosting_models.rds")
 
 
 pc_models <- list(
-  
+
   PC2 = inputsPerParam$logit$model$PC2,
   PC1 = inputsPerParam$logit$model$PC1,
-  
+
   PC7 = inputsPerParam$satiation_level$model$PC7,
+  PC4 = inputsPerParam$satiation_level$model$PC4,
   PC6 = inputsPerParam$satiation_level$model$PC6,
-  PC5 = inputsPerParam$satiation_level$model$PC5
-  
+  PC11 = inputsPerParam$satiation_level$model$PC11,
+  PC8 = inputsPerParam$satiation_level$model$PC8,
+  PC3 = inputsPerParam$satiation_level$model$PC3
+
 )
 
 
@@ -60,14 +63,14 @@ cat(
 
 
 input_bounds <- data.frame(
-  
+
   input = all_inputs,
-  
+
   min = NA_real_,
   max = NA_real_,
-  
+
   parameter_type = NA_character_
-  
+
 )
 
 
@@ -76,41 +79,44 @@ input_bounds <- data.frame(
 # ============================================================
 
 for (i in seq_len(nrow(input_bounds))) {
-  
+
   input <- input_bounds$input[i]
-  
-  
+
+
   # ----------------------------------------------------------
   # Comprobar si el input pertenece al modelo de logits
   # ----------------------------------------------------------
-  
+
   if (input %in% inputs_by_pc$PC2 ||
       input %in% inputs_by_pc$PC1) {
-    
+
     input_bounds$min[i] <- -1000
     input_bounds$max[i] <- 0
-    
+
     input_bounds$parameter_type[i] <- "logit"
-    
+
   }
-  
-  
+
+
   # ----------------------------------------------------------
   # Comprobar si el input pertenece al modelo de
   # satiation_level
   # ----------------------------------------------------------
-  
+
   else if (input %in% inputs_by_pc$PC7 ||
            input %in% inputs_by_pc$PC6 ||
-           input %in% inputs_by_pc$PC5) {
-    
+           input %in% inputs_by_pc$PC4 ||
+           input %in% inputs_by_pc$PC11 ||
+           input %in% inputs_by_pc$PC8 ||
+           input %in% inputs_by_pc$PC3) {
+
     input_bounds$min[i] <- 0
     input_bounds$max[i] <- 40
-    
+
     input_bounds$parameter_type[i] <- "satiation_level"
-    
+
   }
-  
+
 }
 
 
@@ -123,14 +129,14 @@ unknown_inputs <- input_bounds$input[
 ]
 
 if (length(unknown_inputs) > 0) {
-  
+
   stop(
     paste(
       "No se ha podido determinar el tipo de estos inputs:",
       paste(unknown_inputs, collapse = ", ")
     )
   )
-  
+
 }
 
 
@@ -140,24 +146,24 @@ if (length(unknown_inputs) > 0) {
 
 
 generate_initial_population <- function(n, bounds) {
-  
+
   population <- as.data.frame(
     lapply(
       seq_len(nrow(bounds)),
       function(i) {
-        
+
         runif(
           n,
           min = bounds$min[i],
           max = bounds$max[i]
         )
-        
+
       }
     )
   )
-  
+
   names(population) <- bounds$input
-  
+
   population
 }
 
@@ -167,27 +173,27 @@ generate_initial_population <- function(n, bounds) {
 
 
 predict_components <- function(new_inputs, pc_models) {
-  
+
   predictions <- list()
-  
+
   for (pc_name in names(pc_models)) {
-    
+
     info <- pc_models[[pc_name]]
-    
+
     feature_names <- info$feature_names
     model <- info$model
-    
+
     # --------------------------------------------------------
     # Comprobar que todos los inputs necesarios están presentes
     # --------------------------------------------------------
-    
+
     missing_inputs <- setdiff(
       feature_names,
       names(new_inputs)
     )
-    
+
     if (length(missing_inputs) > 0) {
-      
+
       stop(
         paste(
           "El modelo de",
@@ -196,109 +202,111 @@ predict_components <- function(new_inputs, pc_models) {
           paste(missing_inputs, collapse = ", ")
         )
       )
-      
+
     }
-    
-    
+
+
     # --------------------------------------------------------
     # Seleccionar exactamente los inputs utilizados
     # por este modelo
     # --------------------------------------------------------
-    
+
     df_features <- new_inputs[
       ,
       feature_names,
       drop = FALSE
     ]
-    
-    
+
+
     # --------------------------------------------------------
     # Crear DMatrix
     # --------------------------------------------------------
-    
+
     dmat <- xgb.DMatrix(
       data = as.matrix(df_features)
     )
-    
-    
+
+
     # --------------------------------------------------------
     # Predicción del componente
     # --------------------------------------------------------
-    
+
     predictions[[pc_name]] <- predict(
       model,
       dmat
     )
-    
-  }
-  
-  
-  as.data.frame(predictions)
-  
-}
 
+  }
+
+
+  as.data.frame(predictions)
+
+}
 
 
 # 6. PCs -> MAE
 
 predict_mae <- function(pc_predictions, F_model) {
-  
+
   # ----------------------------------------------------------
   # Variables esperadas por F
   # ----------------------------------------------------------
-  
+
   F_features <- F_model$feature_names
-  
+
   # Si feature_names no está disponible, usar los 5 PCs
   if (is.null(F_features)) {
-    
+
     F_features <- c(
       "PC2",
-      "PC7",
-      "PC6",
       "PC1",
-      "PC5"
+      "PC7",
+      "PC4",
+      "PC6",
+      "PC11",
+      "PC8",
+      "PC3"
     )
-    
+
   }
-  
-  
+
+
   # ----------------------------------------------------------
   # Comprobar que existen
   # ----------------------------------------------------------
-  
+
   missing_pc <- setdiff(
     F_features,
     names(pc_predictions)
   )
-  
+
   if (length(missing_pc) > 0) {
-    
+
     stop(
       paste(
         "F_model necesita estos componentes:",
         paste(missing_pc, collapse = ", ")
       )
     )
-    
+
   }
-  
-  
+
+
   # ----------------------------------------------------------
   # Extraer únicamente las variables necesarias
   # ----------------------------------------------------------
-  
+
   df_F <- pc_predictions[
     ,
     F_features,
     drop = FALSE
   ]
-  
-  
+
+
   # ----------------------------------------------------------
   # Convertir explícitamente a matriz numérica
   # ----------------------------------------------------------
-  
+
   mat_F <- matrix(
     as.numeric(
       unlist(
@@ -309,26 +317,26 @@ predict_mae <- function(pc_predictions, F_model) {
     nrow = nrow(df_F),
     ncol = ncol(df_F)
   )
-  
-  
+
+
   # ----------------------------------------------------------
   # Crear DMatrix
   # ----------------------------------------------------------
-  
+
   dmat_F <- xgb.DMatrix(
     data = mat_F
   )
-  
-  
+
+
   # ----------------------------------------------------------
   # Predicción
   # ----------------------------------------------------------
-  
+
   predict(
     F_model,
     dmat_F
   )
-  
+
 }
 
 
@@ -337,7 +345,7 @@ predict_mae <- function(pc_predictions, F_model) {
 
 set.seed(123)
 
-n_samples <- 10000000
+n_samples <- 10000
 
 
 population <- generate_initial_population(

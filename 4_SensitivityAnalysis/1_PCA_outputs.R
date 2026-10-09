@@ -29,20 +29,20 @@ outputs_by_tech <- read_experiment_output(
 
 ####### Reference #######
 ref_values <- read.csv('../2. Extraction/Data/all_errors_output_by_tech.csv')  %>%
-  select(where(~ !all(is.na(.)))) %>% 
-  select(-query, -year, -rel_error, -value_chY, -error, -abs_error)
+  select(where(~ !all(is.na(.)))) %>%
+  select(-rel_error, -value_chY, -error, -abs_error)
 
 ###errors###
-all_errors_output_by_tech <- outputs_by_tech %>% 
-  left_join(ref_values, by = c('region', 'technology', 'subsector', 'output', 'sector'))   %>% 
+all_errors_output_by_tech <- outputs_by_tech %>%
+  left_join(ref_values, by = c('region', 'technology', 'subsector', 'output', 'sector'))   %>%
   filter(!is.na(value_ref) & !is.na(`2021`)) %>%
   mutate(error_abs = abs(value_ref -`2021`),
          error = value_ref -`2021`)%>%
-  select(-`2021`, -value_ref) 
+  select(-`2021`, -value_ref)
 
 ### Delete run outliers
 #errors per run#
-mean_error_per_run <- all_errors_output_by_tech %>% 
+mean_error_per_run <- all_errors_output_by_tech %>%
   group_by(run_id) %>%
   summarise(MAE = mean(error_abs),
             RMSE = sqrt(mean(error^2))) %>%
@@ -68,7 +68,7 @@ all_errors_output_by_tech <- all_errors_output_by_tech %>%
 
 output_keys <- all_errors_output_by_tech %>%
   select(
-    "region","sector","subsector","output","technology" 
+    "region","sector","subsector","output","technology"
   ) %>%
   distinct() %>%
   mutate(output_id = row_number())
@@ -78,10 +78,10 @@ outputs <- all_errors_output_by_tech %>%
   left_join(
     output_keys,
     by = c(
-      "region","sector","subsector","output","technology" 
+      "region","sector","subsector","output","technology"
     )
   ) %>%
-  select(output_id, run_id, error) 
+  select(output_id, run_id, error)
 
 outputs_wide <- outputs %>%
   select(run_id, output_id, error) %>%
@@ -94,7 +94,7 @@ outputs_wide <- outputs %>%
 
 
 ###### Filtrar outputs por varianza - contribución al error######
-# Cada observación es el error vinculado a un output y a un run específicos. Esto quiere decir no hace falta controlar la varianza por la magnitud de la observación, 
+# Cada observación es el error vinculado a un output y a un run específicos. Esto quiere decir no hace falta controlar la varianza por la magnitud de la observación,
 # puesto que inherentemente aquellos que tienen varianza alta, aunque venga dada por una magnitud elevada, su contribución al error es alta y por tanto también de interés
 
 
@@ -103,7 +103,7 @@ outputs_wide <- outputs %>%
 # 1. CONTRIBUCIÓN AL ERROR
 
 
-total_error_per_run <- all_errors_output_by_tech %>% 
+total_error_per_run <- all_errors_output_by_tech %>%
   group_by(run_id) %>%
   summarise(
     SAE = sum(error_abs),
@@ -167,14 +167,14 @@ cols_keep <- c(outputs_keep, "run_id")
 
 #### Filtrar outputs más significativos para el error ####
 outputs_wide_filtered <- outputs_wide %>%
-  select(all_of(cols_keep)) 
+  select(all_of(cols_keep))
 
 output_cols <- grep("^output", names(outputs_wide_filtered))
 
 cat(ncol(outputs_wide), ' vars -> ', ncol(outputs_wide_filtered),' vars \n', (ncol(outputs_wide) - ncol(outputs_wide_filtered))/ncol(outputs_wide)*100,'% less')
 
 ####  Eliminar Na o NaN que sean muy numerosos y no se hayan podiod eliminar por varianza baja o contribución al error
-# 
+#
 output_cols <- grep("^output_", names(outputs_wide_filtered))
 
 # Matriz de outputs
@@ -231,8 +231,8 @@ cat(ncol(outputs_wide_filtered), 'variables -> ',n_pc ,'variables')
 
 pca_scores <- as.data.frame(pca$x[, 1:n_pc])
 
-df_PCA <- cbind(run_id = outputs_wide_filtered$run_id, pca_scores) %>% 
-  left_join(mean_error_per_run, by = 'run_id') 
+df_PCA <- cbind(run_id = outputs_wide_filtered$run_id, pca_scores) %>%
+  left_join(mean_error_per_run, by = 'run_id')
 
 
 write.csv(df_PCA, 'outputs_PCA.csv', row.names = FALSE)
