@@ -7,12 +7,21 @@ library(purrr)
 source("../../GCAM_sensitivity_analysis/R/Storage/explore_dataBase.R")
 
 ################### DATA ########################
+regions_eur <- c("Austria","Belgium","Bulgaria","Croatia","Cyprus","Czech Republic","Denmark","Estonia","Finland","France","Germany","Greece","Hungary","Ireland","Italy",
+  "Latvia","Lithuania","Luxembourg","Malta","Netherlands","Poland","Portugal","Romania","Slovakia","Slovenia","Spain","Sweden","Albania","Bosnia and Herzegovina","Iceland",
+  "Macedonia","Moldova","Norway","Serbia and Montenegro","Turkey","UK","Ukraine")
 
+ref_values <- read.csv('../2. Extraction/Data/all_errors_output_by_tech.csv')  %>%
+  select(where(~ !all(is.na(.)))) %>%
+  filter(region %in% regions_eur)
+MAE_ref <- mean(ref_values$abs_error)
 ######## outputs PCA #########
-df_total <- read.csv('outputs_PCA.csv') %>%
-  select(-MAE, -RMSE,-RMSE_log) # Nos quedamos solo con MAE_log
+df_total <- read.csv('outputs_PCA.csv') #%>% select(-MAE, -RMSE,-RMSE_log) # Nos quedamos solo con MAE
 
-########  Gradient Boosting ######## 
+
+##Discretizar
+df_total <- df_total %>% mutate(MAE_diff = MAE_ref - MAE)
+########  Gradient Boosting ########
 #Explore importances
 library(xgboost)
 library(dplyr)
@@ -20,7 +29,7 @@ library(ggplot2)
 
 
 df_model <- df_total %>%
-  select(MAE_log, starts_with("PC")) %>%
+  select(MAE, starts_with("PC")) %>%
   na.omit()
 
 
@@ -45,8 +54,8 @@ X_test  <- as.matrix(test %>% select(starts_with("PC")))
 
 
 
-y_train <- train$MAE_log
-y_test  <- test$MAE_log
+y_train <- train$MAE
+y_test  <- test$MAE
 dtrain <- xgb.DMatrix(
   data = X_train,
   label = y_train
@@ -84,13 +93,13 @@ results <- vector("list", nrow(grid))
 set.seed(123)
 
 for (i in 1:nrow(grid)) {
-  
+
   params <- list(
     objective = "reg:squarederror",
-    
+
     # Calcular las tres métricas
     eval_metric = c("rmse", "mae"),
-    
+
     max_depth = grid$max_depth[i],
     eta = grid$eta[i],
     min_child_weight = grid$min_child_weight[i],
@@ -99,8 +108,8 @@ for (i in 1:nrow(grid)) {
     lambda = grid$lambda[i],
     alpha = grid$alpha[i]
   )
-  
-  
+
+
   cv <- xgb.cv(
     params = params,
     data = dtrain,
@@ -109,36 +118,36 @@ for (i in 1:nrow(grid)) {
     early_stopping_rounds = 30,
     verbose = 0
   )
-  
-  
+
+
   # ==========================================================
   # Mejor iteración según RMSE
   # ==========================================================
-  
+
   best_iter <- which.min(
     cv$evaluation_log$test_rmse_mean
   )
-  
-  
+
+
   # Métricas en la mejor iteración
   best_rmse <- cv$evaluation_log$test_rmse_mean[best_iter]
-  
+
   best_mae <- cv$evaluation_log$test_mae_mean[best_iter]
-  
-  
+
+
   # R² calculado a partir del RMSE
   # R² = 1 - MSE / varianza de y
   best_mse <- best_rmse^2
-  
+
   best_r2 <- 1 - (
     best_mse / var(y_train)
   )
-  
-  
+
+
   # ==========================================================
   # Guardar resultados
   # ==========================================================
-  
+
   results[[i]] <- data.frame(
     max_depth = grid$max_depth[i],
     eta = grid$eta[i],
@@ -147,15 +156,15 @@ for (i in 1:nrow(grid)) {
     colsample_bytree = grid$colsample_bytree[i],
     lambda = grid$lambda[i],
     alpha = grid$alpha[i],
-    
+
     nrounds = best_iter,
-    
+
     RMSE_CV = best_rmse,
     MAE_CV = best_mae,
     R2_CV = best_r2
   )
-  
-  
+
+
   cat(
     "Combinación", i, "/", nrow(grid),
     "- RMSE:", round(best_rmse, 4),
@@ -208,7 +217,7 @@ set.seed(123)
 
 params_best <- list(
   objective = "reg:squarederror",
-  
+
   max_depth = best_params$max_depth,
   eta = best_params$eta,
   min_child_weight = best_params$min_child_weight,
@@ -222,10 +231,10 @@ params_best <- list(
 model <- xgboost(
   data = X_train,
   label = y_train,
-  
+
   nrounds = best_params$nrounds,
   params = params_best,
-  
+
   verbose = 0
 )
 
@@ -272,7 +281,7 @@ importance_99 <- importance %>%
   )
 
 pcs_99 <- importance_99$Feature
-cols <- c("MAE_log", pcs_99)
+cols <- c("MAE", pcs_99)
 
 #### Retrain
 df_model_retrain <- df_total %>%
@@ -291,8 +300,8 @@ test  <- df_model_retrain[-idx, ]
 X_train <- as.matrix(train %>% select(starts_with("PC")))
 X_test  <- as.matrix(test %>% select(starts_with("PC")))
 
-y_train <- train$MAE_log
-y_test  <- test$MAE_log
+y_train <- train$MAE
+y_test  <- test$MAE
 dtrain <- xgb.DMatrix(
   data = X_train,
   label = y_train
@@ -302,10 +311,10 @@ dtrain <- xgb.DMatrix(
 model <- xgboost(
   data = X_train,
   label = y_train,
-  
+
   nrounds = best_params$nrounds,
   params = params_best,
-  
+
   verbose = 0
 )
 
@@ -344,46 +353,46 @@ write.csv(df_final, 'df_best_components.csv', row.names = FALSE)
 xgb.save(model, "F_model_xgboost.json")
 
 # model_metadata <- list(
-#   
+#
 #   # Variables de entrada
 #   features = colnames(X_train),
-#   
+#
 #   # Variable objetivo
-#   target = "MAE_log",
-#   
+#   target = "MAE",
+#
 #   # Hiperparámetros
 #   params = params_best,
-#   
+#
 #   # Número de árboles
 #   nrounds = best_params$nrounds,
-#   
+#
 #   # Resultados CV
 #   RMSE_CV = best_params$RMSE_CV,
 #   MAE_CV = best_params$MAE_CV,
 #   R2_CV = best_params$R2_CV,
-#   
+#
 #   # Resultados test
 #   R2_train = R2_train,
 #   R2_test = R2_test,
 #   RMSE_test = RMSE_test,
 #   MAE_test = MAE_test,
-#   
+#
 #   # Seed
 #   seed = 123,
-#   
+#
 #   # Fecha
 #   date = Sys.time(),
-#   
+#
 #   # Versión de xgboost
 #   xgboost_version = as.character(packageVersion("xgboost"))
 # )
-# 
+#
 # saveRDS(
 #   model_metadata,
 #   "F_model_metadata.rds"
 # )
-# 
-# 
+#
+#
 
 
 
@@ -393,53 +402,53 @@ xgb.save(model, "F_model_xgboost.json")
 
 
 
-# 
-# 
-# 
-# 
+#
+#
+#
+#
 # ############# Bayesian network
 # library(bnlearn)
 # library(igraph)
-# 
-# 
-# 
+#
+#
+#
 # df_network <- df_total %>%
 #   select(all_of(cols)) %>%
 #   na.omit()
-# 
+#
 # # Estandarizar
 # df_network_scaled <- as.data.frame(scale(df_network))
 # set.seed(123)
-# 
+#
 # boot_net <- boot.strength(
 #   data = df_network_scaled,
 #   R = 500,
 #   algorithm = "hc",
 #   algorithm.args = list(score = "bic-g")
 # )
-# 
+#
 # boot_net %>%
 #   arrange(desc(strength)) %>%
 #   head(20)
-# 
+#
 # bn_avg <- averaged.network(
 #   boot_net,
 #   threshold = 0.70
 # )
-# 
+#
 # plot(
 #   bn_avg,
 #   main = "Consensus Bayesian network"
 # )
-# 
-# 
-# 
+#
+#
+#
 # edges <- boot_net %>%
 #   filter(
 #     strength >= 0.70,
 #     direction >= 0.50
 #   )
-# 
+#
 # g <- graph_from_data_frame(
 #   edges[, c("from", "to", "strength")],
 #   directed = TRUE
@@ -449,20 +458,20 @@ xgb.save(model, "F_model_xgboost.json")
 #   vertex.size = 30,
 #   vertex.label.cex = 1,
 #   vertex.frame.color = "black",
-#   
+#
 #   edge.width = 1 + 2 * E(g)$strength,
 #   edge.arrow.size = 0.8,
 #   edge.arrow.width = 1.5,
 #   edge.curved = 0,
-#   
+#
 #   edge.label = sprintf("%.2f", E(g)$strength),
 #   edge.label.cex = 0.8,
-#   
+#
 #   layout = layout_with_kk(g)
 # )
-# 
-# 
-# 
-# 
-# 
-# 
+#
+#
+#
+#
+#
+#

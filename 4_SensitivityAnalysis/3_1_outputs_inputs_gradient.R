@@ -10,7 +10,7 @@ source("../../GCAM_sensitivity_analysis/R/Storage/explore_dataBase.R")
 
 
 df_pca_xgboost <- read.csv('df_best_components.csv') %>%
-  select(-MAE_log)
+  select(-MAE)
 
 
 

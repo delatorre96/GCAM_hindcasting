@@ -15,25 +15,26 @@ inputsPerParam <- readRDS("GAM_models.rds")
 
 #Para gradient_boosting fueron
 # pc_models <- list(
-#   
+#
 #   PC2 = inputsPerParam$logit$model$PC2,
 #   PC1 = inputsPerParam$logit$model$PC1,
-#   
+#
 #   PC7 = inputsPerParam$satiation_level$model$PC7,
 #   PC6 = inputsPerParam$satiation_level$model$PC6,
 #   PC5 = inputsPerParam$satiation_level$model$PC5
-#   
+#
 # )
 #Para gams
 pc_models <- list(
-  
+
   PC2 = inputsPerParam$price_elasticity$model$PC2,
   PC1 = inputsPerParam$price_elasticity$model$PC1,
-  
+
+  PC4 = inputsPerParam$satiation_level$model$PC4,
+  PC3 = inputsPerParam$satiation_level$model$PC3,
   PC7 = inputsPerParam$satiation_level$model$PC7,
-  PC6 = inputsPerParam$satiation_level$model$PC6,
-  PC5 = inputsPerParam$satiation_level$model$PC5
-  
+  PC6 = inputsPerParam$satiation_level$model$PC6
+
 )
 
 
@@ -71,14 +72,14 @@ cat(
 
 
 input_bounds <- data.frame(
-  
+
   input = all_inputs,
-  
+
   min = NA_real_,
   max = NA_real_,
-  
+
   parameter_type = NA_character_
-  
+
 )
 
 
@@ -87,41 +88,42 @@ input_bounds <- data.frame(
 # ============================================================
 
 for (i in seq_len(nrow(input_bounds))) {
-  
+
   input <- input_bounds$input[i]
-  
-  
+
+
   # ----------------------------------------------------------
   # Comprobar si el input pertenece al modelo de price_elasticity
   # ----------------------------------------------------------
-  
+
   if (input %in% inputs_by_pc$PC2 ||
       input %in% inputs_by_pc$PC1) {
-    
+
     input_bounds$min[i] <- -10
     input_bounds$max[i] <- 0
-    
+
     input_bounds$parameter_type[i] <- "price_elasticity"
-    
+
   }
-  
-  
+
+
   # ----------------------------------------------------------
   # Comprobar si el input pertenece al modelo de
   # satiation_level
   # ----------------------------------------------------------
-  
-  else if (input %in% inputs_by_pc$PC7 ||
-           input %in% inputs_by_pc$PC6 ||
-           input %in% inputs_by_pc$PC5) {
-    
+
+  else if (input %in% inputs_by_pc$PC4 ||
+           input %in% inputs_by_pc$PC3 ||
+           input %in% inputs_by_pc$PC7 ||
+           input %in% inputs_by_pc$PC6) {
+
     input_bounds$min[i] <- 0
     input_bounds$max[i] <- 4
-    
+
     input_bounds$parameter_type[i] <- "satiation_level"
-    
+
   }
-  
+
 }
 
 
@@ -134,14 +136,14 @@ unknown_inputs <- input_bounds$input[
 ]
 
 if (length(unknown_inputs) > 0) {
-  
+
   stop(
     paste(
       "No se ha podido determinar el tipo de estos inputs:",
       paste(unknown_inputs, collapse = ", ")
     )
   )
-  
+
 }
 
 
@@ -151,24 +153,24 @@ if (length(unknown_inputs) > 0) {
 
 
 generate_initial_population <- function(n, bounds) {
-  
+
   population <- as.data.frame(
     lapply(
       seq_len(nrow(bounds)),
       function(i) {
-        
+
         round(runif(
           n,
           min = bounds$min[i],
           max = bounds$max[i]
         ),3)
-        
+
       }
     )
   )
-  
+
   names(population) <- bounds$input
-  
+
   population
 }
 
@@ -178,27 +180,27 @@ generate_initial_population <- function(n, bounds) {
 
 
 # predict_components <- function(new_inputs, pc_models) {
-#   
+#
 #   predictions <- list()
-#   
+#
 #   for (pc_name in names(pc_models)) {
-#     
+#
 #     info <- pc_models[[pc_name]]
-#     
+#
 #     feature_names <- info$feature_names
 #     model <- info$model
-#     
+#
 #     # --------------------------------------------------------
 #     # Comprobar que todos los inputs necesarios están presentes
 #     # --------------------------------------------------------
-#     
+#
 #     missing_inputs <- setdiff(
 #       feature_names,
 #       names(new_inputs)
 #     )
-#     
+#
 #     if (length(missing_inputs) > 0) {
-#       
+#
 #       stop(
 #         paste(
 #           "El modelo de",
@@ -207,70 +209,70 @@ generate_initial_population <- function(n, bounds) {
 #           paste(missing_inputs, collapse = ", ")
 #         )
 #       )
-#       
+#
 #     }
-#     
-#     
+#
+#
 #     # --------------------------------------------------------
 #     # Seleccionar exactamente los inputs utilizados
 #     # por este modelo
 #     # --------------------------------------------------------
-#     
+#
 #     df_features <- new_inputs[
 #       ,
 #       feature_names,
 #       drop = FALSE
 #     ]
-#     
-#     
+#
+#
 #     # --------------------------------------------------------
 #     # Crear DMatrix
 #     # --------------------------------------------------------
-#     
+#
 #     dmat <- xgb.DMatrix(
 #       data = as.matrix(df_features)
 #     )
-#     
-#     
+#
+#
 #     # --------------------------------------------------------
 #     # Predicción del componente
 #     # --------------------------------------------------------
-#     
+#
 #     predictions[[pc_name]] <- predict(
 #       model,
 #       dmat
 #     )
-#     
+#
 #   }
-#   
-#   
+#
+#
 #   as.data.frame(predictions)
-#   
+#
 # }
-# 
+#
 
 predict_components <- function(new_inputs, pc_models) {
-  
+
   predictions <- list()
-  
+
   for (pc_name in names(pc_models)) {
-    
+
     info <- pc_models[[pc_name]]
-    
+
     feature_names <- info$feature_names
     model <- info$model
-    
+
     # --------------------------------------------------------
     # Comprobar que todos los inputs necesarios están presentes
     # --------------------------------------------------------
-    
+
     missing_inputs <- setdiff(
       feature_names,
       names(new_inputs)
     )
-    
+
     if (length(missing_inputs) > 0) {
-      
+
       stop(
         paste(
           "El modelo de",
@@ -279,41 +281,41 @@ predict_components <- function(new_inputs, pc_models) {
           paste(missing_inputs, collapse = ", ")
         )
       )
-      
+
     }
-    
+
     # --------------------------------------------------------
     # Seleccionar exactamente los inputs utilizados
     # por este modelo
     # --------------------------------------------------------
-    
+
     df_features <- new_inputs[
       ,
       feature_names,
       drop = FALSE
     ]
-    
+
     # --------------------------------------------------------
     # Asegurar que las variables son numéricas
     # --------------------------------------------------------
-    
+
     df_features[] <- lapply(
       df_features,
       as.numeric
     )
-    
+
     # --------------------------------------------------------
     # Predicción del GAM
     # --------------------------------------------------------
-    
+
     predictions[[pc_name]] <- predict(
       model,
       newdata = df_features,
       type = "response"
     )
-    
+
   }
-  
+
   as.data.frame(predictions)
 }
 
@@ -321,16 +323,16 @@ predict_components <- function(new_inputs, pc_models) {
 
 # Gradient Boosting predict_mae
 # predict_mae <- function(pc_predictions, F_model) {
-#   
+#
 #   # ----------------------------------------------------------
 #   # Variables esperadas por F
 #   # ----------------------------------------------------------
-#   
+#
 #   F_features <- F_model$feature_names
-#   
+#
 #   # Si feature_names no está disponible, usar los 5 PCs
 #   if (is.null(F_features)) {
-#     
+#
 #     F_features <- c(
 #       "PC2",
 #       "PC7",
@@ -338,46 +340,46 @@ predict_components <- function(new_inputs, pc_models) {
 #       "PC1",
 #       "PC5"
 #     )
-#     
+#
 #   }
-#   
-#   
+#
+#
 #   # ----------------------------------------------------------
 #   # Comprobar que existen
 #   # ----------------------------------------------------------
-#   
+#
 #   missing_pc <- setdiff(
 #     F_features,
 #     names(pc_predictions)
 #   )
-#   
+#
 #   if (length(missing_pc) > 0) {
-#     
+#
 #     stop(
 #       paste(
 #         "F_model necesita estos componentes:",
 #         paste(missing_pc, collapse = ", ")
 #       )
 #     )
-#     
+#
 #   }
-#   
-#   
+#
+#
 #   # ----------------------------------------------------------
 #   # Extraer únicamente las variables necesarias
 #   # ----------------------------------------------------------
-#   
+#
 #   df_F <- pc_predictions[
 #     ,
 #     F_features,
 #     drop = FALSE
 #   ]
-#   
-#   
+#
+#
 #   # ----------------------------------------------------------
 #   # Convertir explícitamente a matriz numérica
 #   # ----------------------------------------------------------
-#   
+#
 #   mat_F <- matrix(
 #     as.numeric(
 #       unlist(
@@ -388,53 +390,54 @@ predict_components <- function(new_inputs, pc_models) {
 #     nrow = nrow(df_F),
 #     ncol = ncol(df_F)
 #   )
-#   
-#   
+#
+#
 #   # ----------------------------------------------------------
 #   # Crear DMatrix
 #   # ----------------------------------------------------------
-#   
+#
 #   dmat_F <- xgb.DMatrix(
 #     data = mat_F
 #   )
-#   
-#   
+#
+#
 #   # ----------------------------------------------------------
 #   # Predicción
 #   # ----------------------------------------------------------
-#   
+#
 #   predict(
 #     F_model,
 #     dmat_F
 #   )
-#   
+#
 # }
 
 # GAM predict_mae
 
 predict_mae <- function(pc_predictions, F_model) {
-  
+
   # ----------------------------------------------------------
   # Variables esperadas por F
   # ----------------------------------------------------------
-  
+
   F_features <- c(
     "PC2",
+    "PC4",
+    "PC3",
     "PC7",
     "PC6",
-    "PC1",
-    "PC5"
+    "PC1"
   )
-  
+
   # ----------------------------------------------------------
   # Comprobar que existen
   # ----------------------------------------------------------
-  
+
   missing_pc <- setdiff(
     F_features,
     names(pc_predictions)
   )
-  
+
   if (length(missing_pc) > 0) {
     stop(
       paste(
@@ -443,27 +446,27 @@ predict_mae <- function(pc_predictions, F_model) {
       )
     )
   }
-  
+
   # ----------------------------------------------------------
   # Extraer únicamente las variables necesarias
   # ----------------------------------------------------------
-  
+
   df_F <- pc_predictions[
     ,
     F_features,
     drop = FALSE
   ]
-  
+
   # ----------------------------------------------------------
   # Asegurar que son numéricas
   # ----------------------------------------------------------
-  
+
   df_F[] <- lapply(df_F, as.numeric)
-  
+
   # ----------------------------------------------------------
   # Predicción del GAM
   # ----------------------------------------------------------
-  
+
   predict(
     F_model,
     newdata = df_F,
@@ -524,11 +527,11 @@ best_results <- NULL
 # ============================================================
 
 for (b in seq_len(n_batches)) {
-  
+
   cat(
     "\n--------------------------------------------\n"
   )
-  
+
   cat(
     "Procesando batch",
     b,
@@ -536,18 +539,18 @@ for (b in seq_len(n_batches)) {
     n_batches,
     "\n"
   )
-  
-  
+
+
   # ----------------------------------------------------------
   # Número de filas de este batch
   # ----------------------------------------------------------
-  
+
   start <- (b - 1) * batch_size + 1
   end   <- min(b * batch_size, n_samples)
-  
+
   n_batch <- end - start + 1
-  
-  
+
+
   cat(
     "Combinaciones:",
     format(start, big.mark = ","),
@@ -555,42 +558,42 @@ for (b in seq_len(n_batches)) {
     format(end, big.mark = ","),
     "\n"
   )
-  
-  
+
+
   # ----------------------------------------------------------
   # Generar únicamente este batch
   # ----------------------------------------------------------
-  
+
   population_batch <- generate_initial_population(
     n = n_batch,
     bounds = input_bounds
   )
-  
-  
+
+
   # ----------------------------------------------------------
   # Inputs -> PCs
   # ----------------------------------------------------------
-  
+
   pc_predictions_batch <- predict_components(
     new_inputs = population_batch,
     pc_models = pc_models
   )
-  
-  
+
+
   # ----------------------------------------------------------
   # PCs -> MAE
   # ----------------------------------------------------------
-  
+
   mae_batch <- predict_mae(
     pc_predictions = pc_predictions_batch,
     F_model = F_model
   )
-  
-  
+
+
   # ----------------------------------------------------------
   # Crear resultados del batch
   # ----------------------------------------------------------
-  
+
   results_batch <- bind_cols(
     population_batch,
     pc_predictions_batch
@@ -598,46 +601,46 @@ for (b in seq_len(n_batches)) {
     mutate(
       MAE = mae_batch
     )
-  
-  
+
+
   # ----------------------------------------------------------
   # Conservar únicamente los mejores candidatos
   # ----------------------------------------------------------
-  
+
   best_results <- bind_rows(
     best_results,
     results_batch
-  ) 
-  
-  
+  )
+
+
   # ----------------------------------------------------------
   # Mostrar progreso
   # ----------------------------------------------------------
-  
+
   cat(
     "MAE mínimo del batch:",
     min(mae_batch, na.rm = TRUE),
     "\n"
   )
-  
+
   cat(
     "MAE máximo:",
     max(mae_batch, na.rm = TRUE),
     "\n"
   )
-  
-  
+
+
   # ----------------------------------------------------------
   # Liberar memoria
   # ----------------------------------------------------------
-  
+
   rm(
     population_batch,
     pc_predictions_batch,
     mae_batch,
     results_batch
   )
-  
+
   gc()
 }
 
@@ -689,20 +692,22 @@ plot(
 ############################
 
 input_keys <- bind_rows(
-  pc_models$PC1$input_keys,
   pc_models$PC2$input_keys,
-  pc_models$PC5$input_keys,
+  pc_models$PC4$input_keys,
+  pc_models$PC3$input_keys,
+  pc_models$PC7$input_keys,
   pc_models$PC6$input_keys,
-  pc_models$PC7$input_keys
+  pc_models$PC1$input_keys
 ) %>%
   distinct(input_id, .keep_all = TRUE)
 
 
 results_next2zero <- results %>%
-  filter(MAE < 0.001, MAE > - 0.001) %>% select(-PC2, -PC1, -PC7, -PC6, -PC5) 
+  filter(MAE < 0.1, MAE > -0.1) %>%
+  select(-PC2, -PC4, -PC3, -PC7, -PC6, -PC1) %>%
+  mutate(config_id = row_number())
 
 results_long <- results_next2zero %>%
-  mutate(run_id = rownames(.)) %>%
   pivot_longer(
     cols = starts_with("input_"),
     names_to = "input",
@@ -714,11 +719,7 @@ results_long <- results_next2zero %>%
   left_join(
     input_keys,
     by = "input_id"
-  ) %>% 
-  mutate(
-    param_config = match(run_id, unique(run_id))
-  ) %>% 
-  select(-run_id) %>%
+  ) %>%
   mutate(
     type_of_param = if_else(
       input_id %in% c(2, 4),
@@ -728,10 +729,12 @@ results_long <- results_next2zero %>%
     destination_file = paste0(
       sub("\\.xml$", "", xml_file),
       "_cal.xml"
-    )
-  ) %>% mutate(year = 2021) %>%
+    ),
+    year = 2021,
+    param_config = config_id
+  ) %>%
+  select(-input) %>%
   rename(param = value)
-
 
 write.csv(results_long, 'df_params_new_inputs_GAM.csv', row.names = FALSE)
 

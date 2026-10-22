@@ -9,6 +9,7 @@ source("../../GCAM_sensitivity_analysis/R/Storage/explore_dataBase.R")
 ################### DATA ########################
 
 ######## outputs PCA #########
+df_total <- read.csv('outputs_PCA.csv')
 
 df_pca_xgboost <- read.csv('df_best_components.csv')
 ########  GAM  ########
@@ -23,7 +24,7 @@ library(ggplot2)
 
 
 df_model <- df_pca_xgboost %>%
-  select(MAE_log, starts_with("PC")) %>%
+  select(MAE, starts_with("PC")) %>%
   na.omit()
 
 
@@ -42,8 +43,8 @@ train <- df_model[idx, ]
 test  <- df_model[-idx, ]
 
 
-y_train <- train$MAE_log
-y_test  <- test$MAE_log
+y_train <- train$MAE
+y_test  <- test$MAE
 
 
 
@@ -73,7 +74,7 @@ cat(
 
 # Modelo aditivo:
 #
-# MAE_log =
+# MAE =
 #     intercept
 #     + f1(PC1)
 #     + f2(PC2)
@@ -85,7 +86,7 @@ cat(
 
 gam_formula <- as.formula(
   paste(
-    "MAE_log ~",
+    "MAE ~",
     paste(
       paste0("s(", pc_names, ", bs = 'tp', k = 20)"),
       collapse = " + "
@@ -247,35 +248,35 @@ saveRDS(
 
 
 model_metadata <- list(
-  
+
   # Variables de entrada
   features = pc_names,
-  
+
   # Variable objetivo
-  target = "MAE_log",
-  
+  target = "MAE",
+
   # Fórmula
   formula = formula(model),
-  
+
   # Método de estimación
   method = "REML",
-  
+
   # Resultados test
   R2_train = R2_train,
   R2_test = R2_test,
-  
+
   RMSE_train = RMSE_train,
   RMSE_test = RMSE_test,
-  
+
   MAE_train = MAE_train,
   MAE_test = MAE_test,
-  
+
   # Seed
   seed = 123,
-  
+
   # Fecha
   date = Sys.time(),
-  
+
   # Versión de mgcv
   mgcv_version =
     as.character(packageVersion("mgcv"))
