@@ -7,8 +7,8 @@ library(rnaturalearth)
 
 
 
-if (!dir.exists("Graphics")) {
-  dir.create("Graphics")
+if (!dir.exists("Figures")) {
+  dir.create("Figures")
 }
 
 
@@ -267,17 +267,17 @@ print(map_positive_error_frequency)
 
 print(map_MAE)
 print(map_total_abs_error)
-ggsave("Graphics/map_MAE.png", map_MAE,
+ggsave("Figures/map_MAE.png", map_MAE,
        width = 10, height = 8, dpi = 300)
 
-ggsave("Graphics/map_total_abs_error.png", map_total_abs_error,
+ggsave("Figures/map_total_abs_error.png", map_total_abs_error,
        width = 10, height = 8, dpi = 300)
 
 
-ggsave("Graphics/map_positive_error_frequency.png", map_positive_error_frequency,
+ggsave("Figures/map_positive_error_frequency.png", map_positive_error_frequency,
        width = 10, height = 8, dpi = 300)
 
-ggsave("Graphics/map_positive_error_magnitude.png", map_positive_error_magnitude,
+ggsave("Figures/map_positive_error_magnitude.png", map_positive_error_magnitude,
        width = 10, height = 8, dpi = 300)
 
 #################### By sector ####################
@@ -341,7 +341,7 @@ plot_top_MAE <- ggplot(
 print(plot_top_MAE)
 
 ggsave(
-  "Graphics/top_sectors_MAE.png",
+  "Figures/top_sectors_MAE.png",
   plot_top_MAE,
   width = 12,
   height = 8,
@@ -401,7 +401,7 @@ plot_techno_MAE <- ggplot(
 print(plot_techno_MAE)
 
 ggsave(
-  "Graphics/top_technologies_MAE.png",
+  "Figures/top_technologies_MAE.png",
   plot_techno_MAE,
   width = 12,
   height = 8,
@@ -494,7 +494,7 @@ map_dominant_sector <- ggplot(map_sector_sf) +
 print(map_dominant_sector)
 
 ggsave(
-  "Graphics/map_dominant_sector.png",
+  "Figures/map_dominant_sector.png",
   map_dominant_sector,
   width = 12,
   height = 8,
@@ -589,7 +589,7 @@ map_dominant_technology <- ggplot(map_technology_sf) +
 print(map_dominant_technology)
 
 ggsave(
-  "Graphics/map_dominant_technology.png",
+  "Figures/map_dominant_technology.png",
   map_dominant_technology,
   width = 12,
   height = 8,
