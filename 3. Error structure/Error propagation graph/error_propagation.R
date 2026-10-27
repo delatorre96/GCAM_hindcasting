@@ -29,8 +29,8 @@ library(tidyr)
 library(igraph)
 library(Matrix)
 
-base_dir <- "C:/Users/ignacio.delatorre/Documents/GCAM/Hindcasting/Error propagation graph"
-err_file <- "C:/Users/ignacio.delatorre/Documents/GCAM/Hindcasting/2. Extraction/Data/all_errors_output_by_tech.csv"
+base_dir <- "C:/GCAM/Nacho/Hindcasting/Error propagation graph"
+err_file <- "C:/GCAM/Nacho/Hindcasting/2. Extraction/Data/all_errors_output_by_tech.csv"
 
 nodes <- read_csv(file.path(base_dir, "gcam_graph_nodes.csv"), guess_max = 200000, show_col_types = FALSE)
 edges <- read_csv(file.path(base_dir, "gcam_graph_edges.csv"), guess_max = 200000, show_col_types = FALSE)
