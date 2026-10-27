@@ -29,7 +29,7 @@ library(tidyr)
 library(igraph)
 library(Matrix)
 
-base_dir <- "C:/GCAM/Nacho/Hindcasting/Error propagation graph"
+base_dir <- "C:/GCAM/Nacho/Hindcasting/3. Error structure/Error propagation graph"
 err_file <- "C:/GCAM/Nacho/Hindcasting/2. Extraction/Data/all_errors_output_by_tech.csv"
 
 nodes <- read_csv(file.path(base_dir, "gcam_graph_nodes.csv"), guess_max = 200000, show_col_types = FALSE)
@@ -281,9 +281,9 @@ g_sec <- sector_edges %>%
   graph_from_data_frame(directed = TRUE)
 
 # Ejemplo de visualización local:
-# sub <- make_ego_graph(g_sec, order = 1, nodes = "Iberian_Peninsula|electricity", mode = "all")[[1]]
-# plot(sub, vertex.label.cex = 0.6, edge.arrow.size = 0.3,
-#      edge.color = ifelse(E(sub)$e_flow > 0, "firebrick", "steelblue"))
+sub <- make_ego_graph(g_sec, order = 10, nodes = c("Iberian_Peninsula|electricity"), mode = "all")[[1]]
+plot(sub, vertex.label.cex = 0.6, edge.arrow.size = 0.3,
+     edge.color = ifelse(E(sub)$e_flow > 0, "firebrick", "steelblue"))
 
 # =============================================================================
 # 8. Guardar resultados
