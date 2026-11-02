@@ -22,7 +22,9 @@ Cada paso es una identidad algebraica comprobable numéricamente; la sección 8 
 Para toda cantidad X (output de una tecnología, flujo de una arista, oferta de un mercado) el error es:
 
 ```latex
+$$
 e(X) = \ln\frac{X^{chY}}{X^{ref}} = \Delta \ln X
+$$
 ```
 
 Un e > 0 indica que la ejecución con base 2015 sobreestima respecto a la referencia. Para leerlo como porcentaje: 100 × (exp(e) − 1). Con errores pequeños, e ≈ error relativo (e = 0,10 equivale a +10,5 %).
@@ -60,7 +62,9 @@ Las cantidades fluyen de izquierda a derecha, pero el error se hereda de derecha
 **Demanda final no registrada.** *Inputs by tech* solo recoge consumos de tecnologías. La demanda final de alimentos (`FoodDemand_*`), los mercados de política y otras demandas no son tecnologías, así que algunos mercados no cuadran. La diferencia entre oferta y demanda registrada se añade como una arista hacia un sumidero. Así, en todo mercado:
 
 ```latex
+$$
 S_M = \sum_{t \in \text{prov}(M)} Q_t = \sum_{c \in \text{cons}(M)} F_c
+$$
 ```
 
 donde la suma de consumidores incluye el sumidero. Esta igualdad es la que hace exactos los pasos 2 y 3.
@@ -76,7 +80,9 @@ El error de una tecnología se separa exactamente en el error de la demanda tota
 **Motivación.** En GCAM una tecnología no decide cuánto produce: el mercado al que vende fija una demanda total y la función logit anidada la reparte entre regiones (en mercados comunes), subsectores y tecnologías. El output de una tecnología t que vende en el mercado M es, por construcción, el producto de la oferta total y de cuotas anidadas:
 
 ```latex
+$$
 Q_t = S_M \cdot \underbrace{\frac{R_{r}}{S_M}}_{s_{reg}} \cdot \underbrace{\frac{U_{u}}{R_{r}}}_{s_{sub}} \cdot \underbrace{\frac{Q_t}{U_{u}}}_{s_{tec}}
+$$
 ```
 
 donde S\_M es la oferta total del mercado, R\_r la oferta de la región y sector de t dentro de M, y U\_u la de su subsector. Es una identidad: los denominadores se cancelan.
@@ -84,7 +90,9 @@ donde S\_M es la oferta total del mercado, R\_r la oferta de la región y sector
 **Fórmula.** Al aplicar el error logarítmico, el producto se convierte en suma exacta:
 
 ```latex
+$$
 e_t = \underbrace{\Delta\ln S_M}_{e_{market}} + \underbrace{\Delta\ln s_{reg} + \Delta\ln s_{sub} + \Delta\ln s_{tec}}_{e_{local}}
+$$
 ```
 
 - **e\_market (heredado):** cuánto se equivoca la demanda total del mercado. Lo comparten todos los proveedores del mercado; su origen está aguas abajo, en los consumidores (paso 2).
@@ -115,7 +123,9 @@ El error heredado e\_market del paso 1 se reparte exactamente entre los consumid
 **La media logarítmica.** Se define, para a, b > 0:
 
 ```latex
+$$
 L(a,b) = \frac{a-b}{\ln a - \ln b}, \qquad L(a,a) = a
+$$
 ```
 
 Cumple a − b = L(a, b) · ln(a/b) exactamente, y siempre está entre a y b. Es la herramienta del método LMDI (*Logarithmic Mean Divisia Index*, Ang 2004, 2005), estándar en descomposición de indicadores energéticos.
@@ -123,7 +133,9 @@ Cumple a − b = L(a, b) · ln(a/b) exactamente, y siempre está entre a y b. Es
 **Fórmula.** Como Ŝ\_M − S\_M = Σ\_c (F̂\_c − F\_c), al dividir por L(Ŝ\_M, S\_M):
 
 ```latex
+$$
 \Delta\ln S_M = \sum_{c} \underbrace{\frac{\hat F_c - F_c}{L(\hat S_M, S_M)}}_{contrib_c} = \sum_{c} \underbrace{\frac{L(\hat F_c, F_c)}{L(\hat S_M, S_M)}}_{\alpha_c}\,\Delta\ln F_c
+$$
 ```
 
 - **contrib\_c** (columna `contrib`): aportación del consumidor c al error del mercado, en unidades de error logarítmico. Las aportaciones suman exactamente e\_market.
@@ -161,19 +173,25 @@ Uniendo los pasos 1 y 2 en todas las tecnologías a la vez se obtiene un sistema
 Sustituyendo 3 en 2 y 2 en 1:
 
 ```latex
+$$
 e_t = \underbrace{e_{local,t} + o_{M(t)}}_{origin_t} + \sum_{k} \alpha_{M(t),k}\, e_k
+$$
 ```
 
 con el término de origen del mercado:
 
 ```latex
+$$
 o_M = \underbrace{\sum_k \alpha_{M,k}\, c_k}_{o_{coef}} + \underbrace{contrib_{sumidero}}_{o_{final}} + \underbrace{\sum_{k\ \text{no endógenos}} contrib_k}_{o_{other}}
+$$
 ```
 
 En forma matricial, con B\_tk = α\_M(t),k (el peso del consumidor k en el mercado al que vende t):
 
 ```latex
+$$
 \mathbf{e} = \mathbf{origin} + B\,\mathbf{e} \quad\Longrightarrow\quad \mathbf{e} = (I - B)^{-1}\,\mathbf{origin}
+$$
 ```
 
 **Los cuatro tipos de origen.**
@@ -224,7 +242,9 @@ El grafo tiene 18 bucles; uno de ellos reúne 7.450 nodos y es el núcleo energ�
 **Ejemplo: amplificación en un bucle de dos nodos.** Supongamos que el 30 % de la demanda de electricidad viene del refino (B\_EL,REF = 0,3) y el 20 % de la demanda de líquidos viene de las centrales (B\_REF,EL = 0,2):
 
 ```latex
+$$
 B = \begin{pmatrix} 0 & 0.3 \\ 0.2 & 0 \end{pmatrix}, \qquad (I-B)^{-1} = \frac{1}{1 - 0.3 \cdot 0.2}\begin{pmatrix} 1 & 0.3 \\ 0.2 & 1 \end{pmatrix}
+$$
 ```
 
 El factor 1 / (1 − 0,06) = 1,064 significa que un error nacido en la electricidad vuelve a ella amplificado un 6,4 % después de pasar por el refino. Con pesos mayores la amplificación crece rápidamente: con 0,6 y 0,5 sería 1,43.
