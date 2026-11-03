@@ -46,7 +46,7 @@ regions_eur <- c(
 xml_files <- st1_get_xml_files(config_file = config_file)
 xml_files_EUR <- xml_files[grepl("EUR", xml_files)]
 
-interested_terms <- c('logit-exponent', 'price-elasticity', 'satiation-level')
+interested_terms <- c('logit-exponent', 'price-elasticity', 'satiation-level', 'income-elasticity')
 
 
 xmls_by_value_EUR <- st1_get_xmls_with_value(xml_files = xml_files_EUR,
@@ -55,6 +55,8 @@ xmls_by_value_EUR <- st1_get_xmls_with_value(xml_files = xml_files_EUR,
 
 #For price-elasticity: "transportation_UCD_CORE_EUR.xml"
 #For satiation-level: "building_det_EUR.xml"
+#For income-elasticity: "transportation_UCD_CORE_EUR.xml"
+
 
 xml_file_path <- file.path(dir_xml, "transportation_UCD_CORE_EUR.xml")
 df_price_elas <- st2_extract_price_elasticity_anyXML(xml_file_path) %>%
@@ -62,6 +64,13 @@ df_price_elas <- st2_extract_price_elasticity_anyXML(xml_file_path) %>%
   mutate(destination_file = sub("\\.xml$", "_cal.xml", xml_file))  %>%
   rename('param' = 'price_elasticity') %>% mutate (type_of_param = 'price_elasticity')
 # write.csv(df_price_elas, 'df_params_price_elasticity.csv', row.names = FALSE)
+
+xml_file_path <- file.path(dir_xml, "transportation_UCD_CORE_EUR.xml")
+df_income_elas <- st2_extract_income_elasticity_anyXML(xml_file_path) %>%
+  filter(year == 2021) %>%
+  mutate(destination_file = sub("\\.xml$", "_cal.xml", xml_file))  %>%
+  rename('param' = 'income_elasticity') %>% mutate (type_of_param = 'income_elasticity')
+
 
 xml_file_path <- file.path(dir_xml, "building_det_EUR.xml")
 df_satiationlevel <- st2_extract_satiation_level(xml_file_path) %>%
@@ -74,6 +83,7 @@ df_logits <- createDF_params(xmls_by_value_EUR$`logit-exponent`, regions_eur) %>
 
 df_allParams <- bind_rows (df_logits,
                            df_price_elas,
+                           df_income_elas,
                            df_satiationlevel) %>%
   add_occurrence_index(dir_xml)
 
