@@ -6,7 +6,8 @@
 #       value_ref = Reference (año base 2021), value_chY = BaseYear2015 (año 2021)
 #       Cada nodo tecnología = una fila de outputs by tech; cada arista "supplies"
 #       = tecnología -> mercado al que vende.
-#   - df_allParams.csv  (logit, satiation_level, price_elasticity)
+#   - df_allParams.csv  (logit, satiation_level, price_elasticity, income_elasticity)
+#   - BaseYear2015_outputsByTech.dat (rgcam) para el crecimiento 2015->2021 del transporte
 #
 # Métrica de error:  e = ln(value_chY / value_ref)     (% = 100*(exp(e)-1))
 #
@@ -24,15 +25,22 @@
 #                "inerte" (<= 1 alternativa con producción), "activo" (>= 2)
 #   SATIATION LEVEL: input_name = servicio de edificios -> error de nivel de ese
 #        sector en la región (output total)
-#   PRICE ELASTICITY: energy-final-demand[k] -> 1 trn_pass, 2 trn_freight,
+#   PRICE / INCOME ELASTICITY: energy-final-demand[k] -> 1 trn_pass, 2 trn_freight,
 #        3 trn_aviation_intl, 4 trn_shipping_intl -> error de nivel del servicio
+#        + crecimiento 2015->2021 en la referencia y en la ejecución base 2015:
+#        si tienen signo opuesto, una elasticidad renta positiva no puede
+#        corregir el error (p. ej. caída por COVID).
 # =============================================================================
 
 library(dplyr)
 library(readr)
+library(rgcam)
 
 graph_dir  <- "C:/Users/ignacio.delatorre/Documents/GCAM/Hindcasting/3. Error structure/Error propagation graph"
 params_dir <- "C:/Users/ignacio.delatorre/Documents/GCAM/Hindcasting/4_SensitivityAnalysis/create_dfParams"
+dat_file   <- "C:/Users/ignacio.delatorre/Documents/GCAM/Hindcasting/2. Extraction/BaseYear2015_outputsByTech.dat"
+scen_ref   <- "Reference"
+scen_chY   <- "BaseYear2015_policy_test_noEEAtradetax"
 
 edges_file <- file.path(graph_dir, "gcam_graph_edges.csv")
 if (!file.exists(edges_file)) edges_file <- paste0(edges_file, ".gz")
@@ -148,13 +156,38 @@ service <- sup %>%
 trn_map <- c("1" = "trn_pass", "2" = "trn_freight", "3" = "trn_aviation_intl", "4" = "trn_shipping_intl")
 
 demand_rel <- params %>%
-  filter(type_of_param %in% c("satiation_level", "price_elasticity")) %>%
-  mutate(efd_index = ifelse(type_of_param == "price_elasticity",
+  filter(type_of_param %in% c("satiation_level", "price_elasticity", "income_elasticity")) %>%
+  mutate(efd_index = ifelse(type_of_param %in% c("price_elasticity", "income_elasticity"),
                             sub(".*energy-final-demand\\[([0-9]+)\\].*", "\\1", xpath), NA_character_),
          demand_sector = ifelse(type_of_param == "satiation_level", input_name, unname(trn_map[efd_index]))) %>%
   left_join(service, by = c("region", "demand_sector" = "sector")) %>%
   mutate(status = ifelse(is.na(output_ref_2021), "sin datos (sin output en query)", "activo"),
          error_metric = "nivel del servicio: ln(chY/ref)")
+
+# ---- 4b. Crecimiento 2015 -> 2021 de los servicios de transporte --------------
+#   growth_ref = ln(ref_2021 / ref_2015)   (lo que "pasó", según la referencia calibrada)
+#   growth_chY = ln(chY_2021 / chY_2015)   (lo que proyecta el modelo desde 2015)
+#   Si el signo es opuesto, la elasticidad renta (> 0) no puede cerrar el error.
+prj <- loadProject(dat_file)
+obt <- getQuery(prj, "outputs by tech") %>%
+  filter(scenario %in% c(scen_ref, scen_chY), year %in% c(2015, 2021),
+         sector %in% unname(trn_map), output == sector) %>%
+  group_by(scenario, region, sector, year) %>%
+  summarise(value = sum(value), .groups = "drop")
+
+trn_growth <- obt %>%
+  mutate(key = paste0(ifelse(scenario == scen_ref, "ref", "chY"), "_", year)) %>%
+  select(region, sector, key, value) %>%
+  tidyr::pivot_wider(names_from = key, values_from = value) %>%
+  mutate(growth_ref_2015_2021 = lnr(ref_2021, ref_2015),
+         growth_chY_2015_2021 = lnr(chY_2021, chY_2015)) %>%
+  select(region, demand_sector = sector, growth_ref_2015_2021, growth_chY_2015_2021)
+
+demand_rel <- demand_rel %>%
+  left_join(trn_growth, by = c("region", "demand_sector")) %>%
+  mutate(growth_sign_mismatch = ifelse(
+    type_of_param %in% c("price_elasticity", "income_elasticity") & !is.na(growth_ref_2015_2021),
+    sign(growth_ref_2015_2021) != sign(growth_chY_2015_2021), NA))
 
 # =============================================================================
 # 5. Rankings y salida
@@ -165,7 +198,7 @@ logit_rel$rank_within_family <- NA_real_
 logit_rel$rank_within_family[elig] <- rank(-logit_rel$local_error_abs[elig], ties.method = "first")
 
 demand_rel$rank_within_family <- NA_real_
-for (tp in c("satiation_level", "price_elasticity")) {
+for (tp in c("satiation_level", "price_elasticity", "income_elasticity")) {
   elig <- demand_rel$type_of_param == tp & demand_rel$status == "activo"
   demand_rel$rank_within_family[elig] <- rank(-abs(demand_rel$demand_error_abs[elig]), ties.method = "first")
 }
@@ -181,8 +214,10 @@ relevance <- bind_rows(logit_rel, demand_rel)
 #  Satiation (solo "activo", EJ):
 #    prioridad 1: dentro del 80 % acumulado de |demand_error_abs| y |error_pct| >= 5 %
 #    prioridad 2: dentro del 95 % acumulado y |error_pct| >= 5 %
-#  Price elasticity (solo "activo"): prioridad 3 si |error_pct| >= 10 % (baja:
-#    el error de transporte es sobre todo COVID / reparto entre regiones)
+#  Price / income elasticity (solo "activo"): prioridad 3 si |error_pct| >= 10 %
+#    (baja: el error de transporte es sobre todo COVID / reparto entre regiones).
+#    Income elasticity: además se excluye si el crecimiento 2015-2021 real y el
+#    del modelo tienen signo opuesto.
 #  multiplier_group: un multiplicador por tipo|región|sector(sin decil)|nivel
 #  family_group:     un multiplicador por tipo|sector(sin decil)|nivel (todas las regiones)
 # =============================================================================
@@ -207,6 +242,8 @@ relevance <- relevance %>%
         cum <= 0.95 & abs(error_pct) >= 5                                      ~ 2,
       type_of_param == "price_elasticity" & status == "activo" &
         abs(error_pct) >= 10                                                   ~ 3,
+      type_of_param == "income_elasticity" & status == "activo" &
+        abs(error_pct) >= 10 & !(growth_sign_mismatch %in% TRUE)              ~ 3,
       TRUE ~ NA_real_),
     candidate = !is.na(priority),
     multiplier_group = case_when(
@@ -214,8 +251,8 @@ relevance <- relevance %>%
         paste("logit", region, strip_decile(supplysector), nest, sep = "|"),
       candidate & type_of_param == "satiation_level" ~
         paste("satiation", region, strip_decile(demand_sector), sep = "|"),
-      candidate & type_of_param == "price_elasticity" ~
-        paste("price_elasticity", region, demand_sector, sep = "|"),
+      candidate & type_of_param %in% c("price_elasticity", "income_elasticity") ~
+        paste(type_of_param, region, demand_sector, sep = "|"),
       TRUE ~ NA_character_),
     family_group = ifelse(candidate, sub("^([^|]*)\\|[^|]*\\|", "\\1|", multiplier_group), NA_character_),
     reason = case_when(
@@ -228,13 +265,22 @@ relevance <- relevance %>%
         paste0("satiation: error de demanda relevante",
                ifelse(group == "heating", "; OJO grados-día constantes", "")),
       type_of_param == "satiation_level" ~ "satiation activo con error pequeño",
-      type_of_param == "price_elasticity" & demand_sector == "trn_aviation_intl" & candidate ~
+      type_of_param == "income_elasticity" & status == "activo" & abs(error_pct) >= 10 &
+        growth_sign_mismatch %in% TRUE ~
+        "no candidato: crecimiento 2015-2021 real y del modelo de signo opuesto; una elasticidad renta positiva no puede corregirlo (probable COVID / shock)",
+      type_of_param %in% c("price_elasticity", "income_elasticity") &
+        demand_sector == "trn_aviation_intl" & candidate ~
         "baja prioridad: +83% sistemático (COVID)",
-      type_of_param == "price_elasticity" & candidate ~
-        "baja prioridad: error de reparto entre regiones / COVID",
+      type_of_param %in% c("price_elasticity", "income_elasticity") &
+        demand_sector %in% c("trn_shipping_intl", "trn_freight") & candidate ~
+        "baja prioridad: error de reparto entre regiones (neto europeo pequeño)",
+      type_of_param %in% c("price_elasticity", "income_elasticity") & candidate ~
+        "baja prioridad: error de nivel del transporte (parcialmente COVID)",
       TRUE ~ "error del servicio pequeño"),
     reason = ifelse(candidate & type_of_param == "logit" & param == 0,
-                    paste0(reason, "; OJO logit=0 (cuotas fijas)"), reason)
+                    paste0(reason, "; OJO logit=0 (cuotas fijas)"), reason),
+    reason = ifelse(candidate & type_of_param == "price_elasticity" & growth_sign_mismatch %in% TRUE,
+                    paste0(reason, "; crecimiento real y del modelo de signo opuesto"), reason)
   ) %>%
   select(-cum) %>%
   arrange(type_of_param, rank_within_family)
@@ -246,7 +292,7 @@ relevance %>% filter(candidate) %>%
             multiplicadores_familia = n_distinct(family_group), .groups = "drop") %>%
   print()
 
-write_csv(relevance, file.path(params_dir, "df_allParams_relevance_R.csv"))
+write_csv(relevance, file.path(params_dir, "df_allParams_relevance.csv"))
 
 # ---- resúmenes ----------------------------------------------------------------
 print(count(relevance, type_of_param, status))
@@ -271,11 +317,14 @@ demand_rel %>% filter(type_of_param == "satiation_level", status == "activo") %>
   select(region, demand_sector, group, param, output_ref_2021, output_chY_2021, error_pct) %>%
   head(15) %>% print(width = Inf)
 
-cat("\nPrice elasticity: error por servicio (neto europeo vs suma de |error|):\n")
-demand_rel %>% filter(type_of_param == "price_elasticity", status == "activo") %>%
+cat("\nTransporte: error por servicio (neto europeo vs suma de |error|) y crecimiento 2015-2021:\n")
+demand_rel %>% filter(type_of_param == "income_elasticity", status == "activo") %>%
   group_by(demand_sector) %>%
   summarise(n = n(), ref = sum(output_ref_2021), chY = sum(output_chY_2021),
             net_pct = 100 * (chY / ref - 1),
             sum_abs_error = sum(abs(demand_error_abs)),
-            median_abs_pct = median(abs(error_pct)), .groups = "drop") %>%
+            median_abs_pct = median(abs(error_pct)),
+            growth_ref_med = median(growth_ref_2015_2021, na.rm = TRUE),
+            growth_chY_med = median(growth_chY_2015_2021, na.rm = TRUE),
+            share_sign_mismatch = mean(growth_sign_mismatch, na.rm = TRUE), .groups = "drop") %>%
   print(width = Inf)
