@@ -118,6 +118,7 @@ df_comp <- df_comp %>%
 
 all_errors_output_by_tech <- df_comp %>%
   select(
+    Units,
     region,
     sector,
     subsector,
@@ -164,10 +165,10 @@ scenario_2015 <- 'BaseYear2015_policy_test_noEEAtradetax'
 all_errors_output_by_tech_ref2015 <- df %>%
   rename(value_chY_2021 = value) %>%
   filter(scenario == scenario_2015) %>%
-  select(-scenario, -year, -Units) %>%
+  select(-scenario, -year) %>%
   left_join(df_ref_2015 %>%
               rename(value_ref_2015 = value) %>%
-              select(-scenario, -year, -Units), by = c("region","sector", "subsector","output","technology")) %>%
+              select(-scenario, -year), by = c("region","sector", "subsector","output","technology")) %>%
   mutate(
     error = value_ref_2015 - value_chY_2021,
     abs_error = abs(error),
@@ -217,10 +218,10 @@ scenario_mean <- 'BaseYear2015_policy_test_noEEAtradetax'
 all_errors_output_by_tech_refmean <- df %>%
   rename(value_chY_2021 = value) %>%
   filter(scenario == scenario_mean) %>%
-  select(-scenario, -Units) %>%
+  select(-scenario) %>%
   left_join(df_ref_mean %>%
               rename(value_ref_mean = value_mean) %>%
-              select(-scenario, -Units), by = c("region","sector", "subsector","output","technology")) %>%
+              select(-scenario), by = c("region","sector", "subsector","output","technology")) %>%
   mutate(
     error = value_ref_mean - value_chY_2021,
     abs_error = abs(error),
