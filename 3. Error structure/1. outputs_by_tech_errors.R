@@ -55,7 +55,7 @@ regions_eur <- c(
 )
 
 
-all_errors <- read.csv('../2. Extraction/Data/all_errors_output_by_tech.csv')  %>%
+all_errors <- read.csv('../2. Extraction/Data/all_errors_output_by_tech_norm.csv')  %>%
   select(where(~ !all(is.na(.)))) %>% filter (region %in% regions_eur)
 
 

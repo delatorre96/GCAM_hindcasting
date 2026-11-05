@@ -34,8 +34,8 @@ library(readr)
 library(rgcam)
 
 # ---- rutas y escenarios -------------------------------------------------------
-dat_file    <- "C:/Users/ignacio.delatorre/Documents/GCAM/Hindcasting/2. Extraction/BaseYear2015_outputsByTech.dat"
-params_dir  <- "C:/Users/ignacio.delatorre/Documents/GCAM/Hindcasting/4_SensitivityAnalysis/create_dfParams"
+dat_file    <- "../../2. Extraction/BaseYear2015_outputsByTech.dat"
+params_dir  <- getwd()
 params_file <- file.path(params_dir, "df_allParams.csv")
 out_file    <- file.path(params_dir, "df_allParams_relevance_outputsOnly.csv")
 
