@@ -11,19 +11,20 @@ source("../../GCAM_sensitivity_analysis/R/Storage/explore_dataBase.R")
 
 con <- dbConnect(
   SQLite(),
-  "../../GCAM_sensitivity_analysis/gcam_sensitivity.sqlite"
+  "../../GCAM_sensitivity_analysis_dipc/gcam_sensitivity.sqlite"
 )
+
 
 #See interested experiments:
 experiments <- dbReadTable(con, "Experiments")
-experiment_id <- 'EXP_2e96286f'
+experiment_id <- 'EXP_02a66a90'
 query_name <- "outputs_by_tech"
 
 outputs_by_tech <- read_experiment_output(
   con = con,
   query_name = query_name,
-  execution_errors = NULL
-  #experiment_id
+  execution_errors = NULL,
+  experiment_id
 )
 
 
@@ -42,26 +43,26 @@ all_errors_output_by_tech <- outputs_by_tech %>%
 
 ### Delete run outliers
 #errors per run#
-mean_error_per_run <- all_errors_output_by_tech %>%
-  group_by(run_id) %>%
-  summarise(MAE = mean(error_abs),
-            RMSE = sqrt(mean(error^2))) %>%
-  mutate(MAE_log = log1p(MAE),
-         RMSE_log = log1p(RMSE))
-
-log1MAE <- mean_error_per_run %>% select(run_id, MAE_log)
-Q1 <- quantile(mean_error_per_run$MAE_log, 0.25, na.rm = TRUE)
-Q3 <- quantile(mean_error_per_run$MAE_log, 0.75, na.rm = TRUE)
-
-IQR_val <- Q3 - Q1
-
-upper_limit <- Q3 +  40*IQR_val
-
-mean_error_per_run <- mean_error_per_run %>%
-  filter(MAE_log <= upper_limit)
-
-all_errors_output_by_tech <- all_errors_output_by_tech %>%
-  filter(run_id %in% mean_error_per_run$run_id)
+# mean_error_per_run <- all_errors_output_by_tech %>%
+#   group_by(run_id) %>%
+#   summarise(MAE = mean(error_abs),
+#             RMSE = sqrt(mean(error^2))) %>%
+#   mutate(MAE_log = log1p(MAE),
+#          RMSE_log = log1p(RMSE))
+#
+# log1MAE <- mean_error_per_run %>% select(run_id, MAE_log)
+# Q1 <- quantile(mean_error_per_run$MAE_log, 0.25, na.rm = TRUE)
+# Q3 <- quantile(mean_error_per_run$MAE_log, 0.75, na.rm = TRUE)
+#
+# IQR_val <- Q3 - Q1
+#
+# upper_limit <- Q3 +  40*IQR_val
+#
+# mean_error_per_run <- mean_error_per_run %>%
+#   filter(MAE_log <= upper_limit)
+#
+# all_errors_output_by_tech <- all_errors_output_by_tech %>%
+#   filter(run_id %in% mean_error_per_run$run_id)
 
 #####
 
@@ -173,35 +174,41 @@ output_cols <- grep("^output", names(outputs_wide_filtered))
 
 cat(ncol(outputs_wide), ' vars -> ', ncol(outputs_wide_filtered),' vars \n', (ncol(outputs_wide) - ncol(outputs_wide_filtered))/ncol(outputs_wide)*100,'% less')
 
-####  Eliminar Na o NaN que sean muy numerosos y no se hayan podiod eliminar por varianza baja o contribución al error
+
+
+
+
 #
-output_cols <- grep("^output_", names(outputs_wide_filtered))
-
-# Matriz de outputs
-X <- as.matrix(outputs_wide_filtered[, output_cols])
-
-# Número de valores no finitos por fila y columna
-n_bad_rows <- rowSums(!is.finite(X))
-n_bad_cols <- colSums(!is.finite(X))
-
-# Umbral automático: percentil 99%
-threshold_rows <- quantile(n_bad_rows, 0.99)
-threshold_cols <- quantile(n_bad_cols, 0.99)
-
-# Filas y columnas a eliminar
-rows_remove <- which(n_bad_rows > threshold_rows)
-cols_remove <- which(n_bad_cols > threshold_cols)
-
-# Eliminar filas
-outputs_wide_filtered <- outputs_wide_filtered[-rows_remove, ]
-
-# Eliminar columnas
-outputs_wide_filtered <- outputs_wide_filtered[
-  ,
-  -output_cols[cols_remove]
-]
-cat(ncol(outputs_wide), 'variables -> ',ncol(outputs_wide_filtered),'variables' )
-
+#
+# ####  Eliminar Na o NaN que sean muy numerosos y no se hayan podiod eliminar por varianza baja o contribución al error
+# #
+# output_cols <- grep("^output_", names(outputs_wide_filtered))
+#
+# # Matriz de outputs
+# X <- as.matrix(outputs_wide_filtered[, output_cols])
+#
+# # Número de valores no finitos por fila y columna
+# n_bad_rows <- rowSums(!is.finite(X))
+# n_bad_cols <- colSums(!is.finite(X))
+#
+# # Umbral automático: percentil 99%
+# threshold_rows <- quantile(n_bad_rows, 0.99)
+# threshold_cols <- quantile(n_bad_cols, 0.99)
+#
+# # Filas y columnas a eliminar
+# rows_remove <- which(n_bad_rows > threshold_rows)
+# cols_remove <- which(n_bad_cols > threshold_cols)
+#
+# # Eliminar filas
+# outputs_wide_filtered <- outputs_wide_filtered[-rows_remove, ]
+#
+# # Eliminar columnas
+# outputs_wide_filtered <- outputs_wide_filtered[
+#   ,
+#   -output_cols[cols_remove]
+# ]
+# cat(ncol(outputs_wide), 'variables -> ',ncol(outputs_wide_filtered),'variables' )
+#
 
 ###### PCA #####
 X <- outputs_wide_filtered %>%

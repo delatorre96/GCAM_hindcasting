@@ -11,16 +11,16 @@ regions_eur <- c("Austria","Belgium","Bulgaria","Croatia","Cyprus","Czech Republ
   "Latvia","Lithuania","Luxembourg","Malta","Netherlands","Poland","Portugal","Romania","Slovakia","Slovenia","Spain","Sweden","Albania","Bosnia and Herzegovina","Iceland",
   "Macedonia","Moldova","Norway","Serbia and Montenegro","Turkey","UK","Ukraine")
 
-ref_values <- read.csv('../2. Extraction/Data/all_errors_output_by_tech.csv')  %>%
-  select(where(~ !all(is.na(.)))) %>%
-  filter(region %in% regions_eur)
-MAE_ref <- mean(ref_values$abs_error)
-######## outputs PCA #########
+# ref_values <- read.csv('../2. Extraction/Data/all_errors_output_by_tech.csv')  %>%
+#   select(where(~ !all(is.na(.)))) %>%
+#   filter(region %in% regions_eur)
+# MAE_ref <- mean(ref_values$abs_error)
+# ######## outputs PCA #########
 df_total <- read.csv('outputs_PCA.csv') #%>% select(-MAE, -RMSE,-RMSE_log) # Nos quedamos solo con MAE
 
 
 ##Discretizar
-df_total <- df_total %>% mutate(MAE_diff = MAE_ref - MAE)
+# df_total <- df_total %>% mutate(MAE_diff = MAE_ref - MAE)
 ########  Gradient Boosting ########
 #Explore importances
 library(xgboost)
