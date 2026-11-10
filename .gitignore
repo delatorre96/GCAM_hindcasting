@@ -2,3 +2,13 @@
 .Rhistory
 .RData
 .Ruserdata
+#----- Ignore data files globally -----
+*.csv
+*.RData
+*.rds
+*.parquet
+*.xlsx
+
+#----- Exceptions: 2015 re-basing folder -----
+!/1. Re-basing GCAM-Europe to 2015/
+!/1. Re-basing GCAM-Europe to 2015/**

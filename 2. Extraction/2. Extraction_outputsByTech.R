@@ -180,7 +180,7 @@ if (!dir.exists("Data")) {
 
 all_errors_output_by_tech_norm <- all_errors_output_by_tech %>%
   select(
-    Units, region, sector, subsector, technology, output,
+    Units, region, sector, subsector, technology, output, scalar,
     value_ref_norm, value_chY_norm,
     error_norm, abs_error_norm, sq_error_norm, rel_error_norm,
     pct_ch_norm, net_pct_ch_norm

@@ -49,6 +49,10 @@ subsector = 'stationary'
 output = 'agricultural energy use'
 technology = 'biomass'
 
+
+
+
+
 params_outputs_most_var <- params_outputs %>%
   filter (region == 'Spain',
           sector == 'agricultural energy use',
@@ -56,227 +60,382 @@ params_outputs_most_var <- params_outputs %>%
           output == 'agricultural energy use',
           technology == 'biomass')
 
-plot(params_outputs_most_var$param, params_outputs_most_var$value_run)
-
-plot(params_outputs_most_var$param, params_outputs_most_var$error)
-
-
-
-
-
-
-
-
-
-
-
-
-ptab <- mc_param_table(inputs_run, relevance)
-
-ptab_ <- ptab %>%
-  transmute(run_id, param_id, type_of_param, region, param, param_default,
-            sector         = coalesce(supplysector, demand_sector),
-            nest_subsector = ifelse(type_of_param == "logit", subsector, NA_character_),
-            level          = ifelse(is.na(nest_subsector), "sector", "subsector"))
-
-# Outputs: solo output primario
-out <- all_errors_output_by_tech %>%
-  filter(output == sector)
-
-
-# 3. Join en dos pasadas
-p_sub <- ptab_ %>% filter(level == "subsector")
-p_sec <- ptab_ %>% filter(level == "sector")
-
-params_outputs <- bind_rows(
-  out %>% inner_join(p_sub, by = c("run_id", "region", "sector", "subsector" = "nest_subsector"),
-                     keep = FALSE, relationship = "many-to-many") %>%
-    mutate(nest_subsector = subsector),
-  out %>% inner_join(p_sec, by = c("run_id", "region", "sector"),
-                     relationship = "many-to-many")
-) %>%
-  # cuota de cada tecnología dentro del nido que controla el parámetro
-  group_by(run_id, param_id) %>%
-  mutate(share_run = value_run / sum(value_run),
-         share_ref = value_ref / sum(value_ref)) %>%
-  ungroup()
-
-
-
-
-
-
-# ------------------------------------------------------------------
-# 0. Diagnóstico: cuántos parámetros tocan cada tecnología (en un run)
-# ------------------------------------------------------------------
-r1 <- params_outputs$run_id[1]
-params_outputs %>%
-  filter(run_id == r1) %>%
-  count(region, sector, subsector, technology, name = "n_params") %>%
-  count(n_params, name = "n_tecnologias")
-
-# ------------------------------------------------------------------
-# 1. X: una columna por parámetro individual (run x param_id)
-# ------------------------------------------------------------------
-X <- ptab %>%
-  distinct(run_id, param_id, param) %>%
-  pivot_wider(names_from = param_id, values_from = param)
-
-# ------------------------------------------------------------------
-# 2. Y: output (o error) de cada tecnología en cada run
-#    y_type = "output": sensibilidad del output  (igual con value_run o error)
-#    y_type = "abs_error": qué parámetro puede reducir el error
-# ------------------------------------------------------------------
-y_type <- "output"
-
-Y <- out %>%
-  mutate(tech_key = paste(region, sector, subsector, technology, sep = "|"),
-         y = if (y_type == "output") value_run else abs(value_run - value_ref)) %>%
-  select(run_id, tech_key, y)
-
-tech_ref <- out %>%
-  distinct(tech_key = paste(region, sector, subsector, technology, sep = "|"), value_ref, Units)
-
-# ------------------------------------------------------------------
-# 3. Qué parámetros tocan cada tecnología (del join anterior)
-# ------------------------------------------------------------------
-links <- params_outputs %>%
-  distinct(tech_key = paste(region, sector, subsector, technology, sep = "|"), param_id)
-
-# ------------------------------------------------------------------
-# 4. PRCC: efecto de cada parámetro descontando los demás que tocan
-#    la misma tecnología
-# ------------------------------------------------------------------
-prcc <- function(y, X) {
-  ry <- rank(y)
-  RX <- apply(X, 2, rank)
-  if (ncol(RX) == 1) return(cor(ry, RX[, 1]))
-  sapply(seq_len(ncol(RX)), function(j) {
-    ey <- resid(lm(ry ~ RX[, -j]))
-    ex <- resid(lm(RX[, j] ~ RX[, -j]))
-    cor(ey, ex)
-  })
-}
-
-Ys <- split(Y[c("run_id", "y")], Y$tech_key)
-Ls <- split(links$param_id, links$tech_key)
-
-sens_tech <- bind_rows(lapply(names(Ls), function(tk) {
-  d <- Ys[[tk]]
-  if (is.null(d)) return(NULL)
-  d  <- inner_join(d, X[c("run_id", Ls[[tk]])], by = "run_id")
-  xm <- as.matrix(d[Ls[[tk]]])
-  keep <- apply(xm, 2, function(v) isTRUE(sd(v, na.rm = TRUE) > 0))   # solo parámetros que variaron
-  ok   <- complete.cases(xm) & !is.na(d$y)
-  if (!any(keep) || sum(ok) < sum(keep) + 10 || sd(d$y[ok]) == 0) return(NULL)
-  tibble(tech_key = tk,
-         param_id = colnames(xm)[keep],
-         prcc     = prcc(d$y[ok], xm[ok, keep, drop = FALSE]),
-         n_runs   = sum(ok))
-}))
-
-# ------------------------------------------------------------------
-# 5. Sensibilidad de cada parámetro individual (resumen sobre las
-#    tecnologías que toca, ponderado por su output de referencia)
-# ------------------------------------------------------------------
-param_info <- ptab %>%
-  distinct(param_id, type_of_param, region, supplysector, subsector, demand_sector, param_default)
-
-sens_param <- sens_tech %>%
-  left_join(tech_ref, by = "tech_key") %>%
-  group_by(param_id) %>%
-  summarise(n_techs        = n(),
-            max_abs_prcc   = max(abs(prcc), na.rm = TRUE),
-            w_mean_abs_prcc = weighted.mean(abs(prcc), value_ref, na.rm = TRUE),
-            tech_max       = tech_key[which.max(abs(prcc))],
-            .groups = "drop") %>%
-  left_join(param_info, by = "param_id") %>%
-  arrange(desc(w_mean_abs_prcc))
-
-sens_param
-
-# ------------------------------------------------------------------
-# 6. (Complemento) sensibilidad individual sobre el error global del run
-# ------------------------------------------------------------------
-L <- out %>% group_by(run_id) %>% summarise(L = mean(error_abs_norm), .groups = "drop")
-
-sens_global <- X %>%
-  inner_join(L, by = "run_id") %>%
-  summarise(across(-c(run_id, L), ~ suppressWarnings(cor(.x, L, method = "spearman")))) %>%
-  pivot_longer(everything(), names_to = "param_id", values_to = "rho_global") %>%
-  left_join(param_info, by = "param_id") %>%
-  arrange(desc(abs(rho_global)))
-
-
-
-
-
-
-
-# 3 parámetros más sensibles y la tecnología donde más pegan
-top3 <- sens_param %>%
-  slice_max(w_mean_abs_prcc, n = 3, with_ties = FALSE) %>%
-  select(param_id, tech_key = tech_max)
-
-# un punto por run: valor del parámetro + output/error de su tecnología
-plot_df <- ptab %>%
-  filter(param_id %in% top3$param_id) %>%
-  distinct(run_id, param_id, param) %>%
-  left_join(top3, by = "param_id") %>%
-  inner_join(out %>%
-               mutate(tech_key = paste(region, sector, subsector, technology, sep = "|")) %>%
-               select(run_id, tech_key, value_run, value_ref),
-             by = c("run_id", "tech_key")) %>%
-  mutate(error = value_run - value_ref,
-         panel = paste0(param_id, "\n→ ", tech_key))
-
-# Output vs parámetro
-ggplot(plot_df, aes(x = param, y = value_run)) +
-  geom_point() +
-  facet_wrap(~ panel, scales = "free") +
-  labs(x = "Valor del parámetro", y = "Output (value_run)")
-
-# Error vs parámetro
-ggplot(plot_df, aes(x = param, y = error)) +
-  geom_point() +
-  facet_wrap(~ panel, scales = "free") +
-  labs(x = "Valor del parámetro", y = "Error (value_run - value_ref)")
-
-
-
-
-
-
-
-
-
-
-
-#una fila por run x parámetro: el nido agregado
-
-params_nest <- params_outputs %>%
-  group_by(run_id, param_id, type_of_param, level, region, sector, nest_subsector,
-           param, param_default, Units) %>%
-  summarise(value_run   = sum(value_run),
-            value_ref   = sum(value_ref),
-            error_abs   = sum(abs(value_run - value_ref)),                         # error por tecnología, sumado
-            error_share = sum(value_ref * abs(log(share_run / share_ref)), na.rm = TRUE),  # error de reparto
-            .groups = "drop") %>%
-  mutate(error_level = log(value_run / value_ref))
-
-
-
-
-# X    <- mc_design_matrix(ptab, level = "multiplier_group")
-#
-# ref  <- mc_reference(dat_file)
-# err  <- mc_output_errors(bind_rows(outputs_by_tech, mc_baseline_run(dat_file)), ref)
-# err$run %>% arrange(L_local_sector_EJ)        # ¿qué runs mejoran el BASELINE?
-#
-# ds   <- mc_build_dataset(X, err, mc_nest_targets(err, c("Poland|regional coal", "UK|regional oil")))
-# own  <- sa_own_nest(ptab, err)                # ¿cada candidato mueve su nido?
-# sa_global(ds, target = "L_local_sector_EJ", method = "spearman")
-# sa_global(ds, target = "Lnest_Poland.regional.coal", method = "rf")
-
-
-
+# 1. Sensitivity analysis: Logit parameter vs. output value
+
+plot(
+  params_outputs_most_var$param,
+  params_outputs_most_var$value_run,
+  main = paste0(
+    "Sensitivity analysis: ", output,
+    "\n", region, " | ", sector, " | ", subsector,
+    " | ", technology
+  ),
+  xlab = "Logit parameter value",
+  ylab = paste0("Output value (", unique(params_outputs_most_var$Units), ")"),
+  pch = 19,
+  col = rgb(0, 0, 1, 0.5),
+  cex = 0.8
+)
+
+# Linear trend
+abline(
+  lm(value_run ~ param, data = params_outputs_most_var),
+  col = "red",
+  lwd = 2
+)
+
+# Default parameter reference
+abline(
+  v = unique(params_outputs_most_var$param_default),
+  col = "darkgreen",
+  lty = 2,
+  lwd = 2
+)
+
+legend(
+  "topright",
+  legend = c("Simulation results", "Linear trend", "Default parameter"),
+  col = c(rgb(0, 0, 1, 0.5), "red", "darkgreen"),
+  pch = c(19, NA, NA),
+  lty = c(NA, 1, 2),
+  lwd = c(NA, 2, 2),
+  bty = "n"
+)
+
+
+
+# 2. Sensitivity analysis: Logit parameter vs. output error
+
+
+plot(
+  params_outputs_most_var$param,
+  params_outputs_most_var$error,
+  main = paste0(
+    "Sensitivity analysis: ", output,
+    "\n", region, " | ", sector, " | ", subsector,
+    " | ", technology
+  ),
+  xlab = "Logit parameter value",
+  ylab = paste0("Output error (", unique(params_outputs_most_var$Units), ")"),
+  pch = 19,
+  col = rgb(0, 0, 1, 0.5),
+  cex = 0.8
+)
+
+# Zero-error reference
+abline(
+  h = 0,
+  col = "black",
+  lty = 2,
+  lwd = 2
+)
+
+# Linear trend
+abline(
+  lm(error ~ param, data = params_outputs_most_var),
+  col = "red",
+  lwd = 2
+)
+
+# Default parameter reference
+abline(
+  v = unique(params_outputs_most_var$param_default),
+  col = "darkgreen",
+  lty = 2,
+  lwd = 2
+)
+
+legend(
+  "topleft",
+  legend = c("Simulation results", "Linear trend", "Zero error", "Default parameter"),
+  col = c(rgb(0, 0, 1, 0.5), "red", "black", "darkgreen"),
+  pch = c(19, NA, NA, NA),
+  lty = c(NA, 1, 2, 2),
+  lwd = c(NA, 2, 2, 2),
+  bty = "n"
+)
+
+
+############### Logits general behavior ###############
+
+# =============================================================================
+# 1. Prepare logit dataset
+# =============================================================================
+
+logits <- ptab %>%
+  select(
+    type_of_param,
+    param,
+    param_default,
+    region,
+    run_id,
+    supplysector,
+    subsector,
+    demand_sector,
+    input_name_csv
+  ) %>%
+  distinct() %>%
+  mutate(
+    delta = param - param_default,
+    direction = case_when(
+      delta > 0 ~ "Increase",
+      delta < 0 ~ "Decrease",
+      delta == 0 ~ "Unchanged",
+      TRUE ~ NA_character_
+    )
+  )
+
+# Check dataset
+glimpse(logits)
+
+# Basic checks
+summary(logits$delta)
+table(logits$direction, useNA = "ifany")
+
+
+
+# =============================================================================
+# 2. Global statistical summary
+# =============================================================================
+
+global_stats <- logits %>%
+  summarise(
+    n = sum(!is.na(delta)),
+
+    mean_delta = mean(delta, na.rm = TRUE),
+    median_delta = median(delta, na.rm = TRUE),
+    sd_delta = sd(delta, na.rm = TRUE),
+
+    min_delta = min(delta, na.rm = TRUE),
+    p05 = quantile(delta, 0.05, na.rm = TRUE),
+    p25 = quantile(delta, 0.25, na.rm = TRUE),
+    p75 = quantile(delta, 0.75, na.rm = TRUE),
+    p95 = quantile(delta, 0.95, na.rm = TRUE),
+    max_delta = max(delta, na.rm = TRUE),
+
+    pct_increase = mean(delta > 0, na.rm = TRUE) * 100,
+    pct_decrease = mean(delta < 0, na.rm = TRUE) * 100,
+    pct_unchanged = mean(delta == 0, na.rm = TRUE) * 100
+  )
+
+print(global_stats)
+
+
+
+# Distribution of logit perturbations
+
+hist(
+  logits$delta,
+  breaks = 50,
+  main = "Global distribution of logit perturbations",
+  xlab = "Logit variation (param - param_default)",
+  ylab = "Frequency",
+  col = "lightblue",
+  border = "white"
+)
+
+abline(
+  v = 0,
+  col = "red",
+  lwd = 2,
+  lty = 2
+)
+
+abline(
+  v = mean(logits$delta, na.rm = TRUE),
+  col = "darkgreen",
+  lwd = 2
+)
+
+legend(
+  "topright",
+  legend = c("No variation", "Mean variation"),
+  col = c("red", "darkgreen"),
+  lty = 2,
+  lwd = 2,
+  bty = "n"
+)
+
+#####Analisis por tipo de param
+
+
+# =============================================================================
+# 3. Statistical summary by parameter type
+# =============================================================================
+
+stats_by_type <- logits %>%
+  group_by(type_of_param) %>%
+  summarise(
+    n = sum(!is.na(delta)),
+
+    mean_delta = mean(delta, na.rm = TRUE),
+    median_delta = median(delta, na.rm = TRUE),
+    sd_delta = sd(delta, na.rm = TRUE),
+
+    p05 = quantile(delta, 0.05, na.rm = TRUE),
+    p95 = quantile(delta, 0.95, na.rm = TRUE),
+
+    pct_increase = mean(delta > 0, na.rm = TRUE) * 100,
+    pct_decrease = mean(delta < 0, na.rm = TRUE) * 100,
+    pct_unchanged = mean(delta == 0, na.rm = TRUE) * 100,
+
+    .groups = "drop"
+  ) %>%
+  arrange(desc(mean_delta))
+
+print(stats_by_type)
+
+
+boxplot(
+  delta ~ type_of_param,
+  data = logits,
+  main = "Logit perturbations by parameter type",
+  xlab = "Parameter type",
+  ylab = "Logit variation",
+  col = "lightblue",
+  border = "gray40",
+  las = 2
+)
+
+abline(
+  h = 0,
+  col = "red",
+  lty = 2,
+  lwd = 2
+)
+
+############## Que params cambian mas los outputs ##########
+
+# =============================================================================
+# Parameter identification
+# =============================================================================
+
+params_outputs_id <- params_outputs %>%
+  mutate(
+    parameter_id = interaction(
+      type_of_param,
+      region,
+      sector,
+      subsector,
+      demand_sector,
+      input_name_csv,
+      drop = TRUE
+    )
+  )
+
+# =============================================================================
+# Output and error sensitivity by parameter
+# =============================================================================
+
+stats_output_sensitivity <- params_outputs_id %>%
+  group_by(
+    parameter_id,
+    type_of_param,
+    region,
+    sector,
+    subsector,
+    output,
+    technology,
+    Units
+  ) %>%
+  summarise(
+
+    n = sum(!is.na(value_run)),
+
+    # Logit variation
+    mean_abs_delta = mean(abs(param - param_default), na.rm = TRUE),
+
+    # Output variability
+    mean_output = mean(value_run, na.rm = TRUE),
+    sd_output = sd(value_run, na.rm = TRUE),
+
+    cv_output = ifelse(
+      mean_output != 0,
+      sd_output / abs(mean_output) * 100,
+      NA_real_
+    ),
+
+    # Error variability
+    mean_error = mean(error, na.rm = TRUE),
+    mean_abs_error = mean(abs(error), na.rm = TRUE),
+    sd_error = sd(error, na.rm = TRUE),
+
+    # Association
+    cor_param_output = cor(
+      param, value_run,
+      use = "complete.obs"
+    ),
+
+    cor_param_error = cor(
+      param, error,
+      use = "complete.obs"
+    ),
+
+    .groups = "drop"
+  )
+
+
+# =============================================================================
+# Top 40 logits associated with highest output variability
+# =============================================================================
+
+top_output_sensitivity <- stats_output_sensitivity %>%
+  arrange(desc(cv_output)) %>%
+  slice_head(n = 40) %>%
+  arrange(cv_output)  # Lowest to highest for horizontal barplot
+
+# Parameter labels
+parameter_labels <- paste(
+  top_output_sensitivity$type_of_param,
+  top_output_sensitivity$region,
+  top_output_sensitivity$output,
+  top_output_sensitivity$technology,
+  sep = " | "
+)
+
+par(mar = c(5, 20, 4, 2))
+
+barplot(
+  top_output_sensitivity$cv_output,
+  names.arg = parameter_labels,
+  horiz = TRUE,
+  las = 1,
+  col = "steelblue",
+  border = NA,
+  main = "Top 40 parameters by relative output variability",
+  xlab = "Output coefficient of variation (%)",
+  cex.names = 0.7
+)
+
+par(mar = c(5, 4, 4, 2))
+
+############# Con error
+top_error_sensitivity <- stats_output_sensitivity %>%
+  arrange(desc(sd_error)) %>%
+  slice_head(n = 20) %>%
+  arrange(sd_error)  # Lowest to highest for horizontal barplot
+
+# Parameter labels
+parameter_labels <- paste(
+  top_error_sensitivity$type_of_param,
+  top_error_sensitivity$region,
+  top_error_sensitivity$output,
+  top_error_sensitivity$technology,
+  sep = " | "
+)
+
+par(mar = c(5, 20, 4, 2))
+
+barplot(
+  top_error_sensitivity$sd_error,
+  names.arg = parameter_labels,
+  horiz = TRUE,
+  las = 1,
+  col = "steelblue",
+  border = NA,
+  main = "Top 20 parameters by absolute error variability",
+  xlab = "Standard deviation of error",
+  cex.names = 0.7
+)
+
+par(mar = c(5, 4, 4, 2))
