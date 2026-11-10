@@ -12,3 +12,5 @@
 #----- Exceptions: 2015 re-basing folder -----
 !/1. Re-basing GCAM-Europe to 2015/
 !/1. Re-basing GCAM-Europe to 2015/**
+!4_SensitivityAnalysis/create_dfParams/df_allParams.csv
+!4_SensitivityAnalysis/create_dfParams/df_allParams_relevance.csv
