@@ -117,9 +117,9 @@ all_errors_output_by_tech <- df_ref %>%
     abs_error = abs(error),
     sq_error = error^2,
     rel_error = ifelse(error == 0 & value_ref == 0, 0,error / value_ref),
-    pct_ch = abs((value_chY - value_ref)/value_ref),
+    abs_pct_ch = abs((value_chY - value_ref)/value_ref),
     net_pct_ch = (value_chY - value_ref)/value_ref,
-    pct_ch_norm = abs((value_chY_norm - value_ref_norm)/value_ref_norm),
+    abs_pct_ch_norm = abs((value_chY_norm - value_ref_norm)/value_ref_norm),
     net_pct_ch_norm = (value_chY_norm - value_ref_norm)/value_ref_norm
   ) %>% filter(Units %in% c('EJ', 'Mt N', 'Mt NH3'))
 
@@ -132,7 +132,7 @@ sdAE_norm <- sd(all_errors_output_by_tech$abs_error_norm, na.rm = TRUE)
 
 prop_error_positivo_norm <- mean(all_errors_output_by_tech$error_norm > 0, na.rm = TRUE)
 
-mean_pct_ch_norm <- mean(all_errors_output_by_tech$pct_ch_norm, na.rm = TRUE)
+mean_abs_pct_ch_norm <- mean(all_errors_output_by_tech$abs_pct_ch_norm, na.rm = TRUE)
 mean_net_pct_ch_norm <- mean(all_errors_output_by_tech$net_pct_ch_norm, na.rm = TRUE)
 sd_net_pct_ch_norm <- sd(all_errors_output_by_tech$net_pct_ch_norm, na.rm = TRUE)
 
@@ -183,7 +183,7 @@ all_errors_output_by_tech_norm <- all_errors_output_by_tech %>%
     Units, region, sector, subsector, technology, output, scalar,
     value_ref_norm, value_chY_norm,
     error_norm, abs_error_norm, sq_error_norm, rel_error_norm,
-    pct_ch_norm, net_pct_ch_norm
+    abs_pct_ch_norm, net_pct_ch_norm
   ) %>%
   rename_with(~ sub("_norm$", "", .x), ends_with("_norm")) %>%
   drop_na()
@@ -198,11 +198,11 @@ all_errors_output_by_tech_noNorm <- all_errors_output_by_tech %>%
     Units, region, sector, subsector, technology, output, year,
     value_ref, scalar, value_ref, value_chY,
     error, abs_error, sq_error, rel_error,
-    pct_ch, net_pct_ch
+    abs_pct_ch, net_pct_ch
   )
 
 
-write.csv(all_errors_output_by_tech_norm, 'Data/all_errors_output_by_tech_No_norm.csv', row.names = FALSE)
+write.csv(all_errors_output_by_tech_noNorm, 'Data/all_errors_output_by_tech_No_norm.csv', row.names = FALSE)
 #
 # ############### MAE ingenuo
 # ### Sobre año anterior

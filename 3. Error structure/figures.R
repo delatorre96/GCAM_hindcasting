@@ -141,7 +141,7 @@ map_MAE <- ggplot(map_sf) +
     expand = FALSE
   ) +
   labs(
-    title = "Mean Absolute Error (MAE) by GCAM region",
+    title = "Mean Absolute Error (MAE) by region",
     subtitle = "GCAM-Europe hindcasting"
   ) +
   theme_minimal() +
@@ -154,19 +154,25 @@ map_MAE <- ggplot(map_sf) +
   )
 
 
-#----- mapa 2: total_abs_error por region -----
+#----- mapa 2: pct ch por region -----
+map_sf_withoutSomeRegions <- europe %>%
+  left_join(
+    map_data_expanded,
+    by = c("name" = "map_name")
+  ) %>%
+  filter(!name %in% c("Albania", "Iceland", "Turkey"))
 
-map_total_abs_error <- ggplot(map_sf) +
-  geom_sf(
-    aes(fill = total_abs_error),
-    color = "white",
-    linewidth = 0.2
-  ) +
+map_pct_change <- ggplot(map_sf_withoutSomeRegions) +
+  geom_sf(aes(fill = weighted_abs_pct_ch_mean * 100),
+          color = "white", linewidth = 0.2) +
   scale_fill_viridis_c(
     option = "viridis",
     na.value = "grey90",
-    name = "Total absolute error",
-    labels = scales::label_number(big.mark = ",", accuracy = 1)
+    name = "Weighted absolute\nchange (%)",
+    labels = scales::label_number(
+      accuracy = 0.001,
+      suffix = "%"
+    )
   ) +
   coord_sf(
     xlim = c(-25, 45),
@@ -174,8 +180,8 @@ map_total_abs_error <- ggplot(map_sf) +
     expand = FALSE
   ) +
   labs(
-    title = "Total Absolute Error by GCAM region",
-    subtitle = "GCAM-Europe hindcasting"
+    title = "Weighted Mean Absolute Percentage Change by GCAM region",
+    subtitle = "GCAM-Europe hindcasting | Weights based on reference values"
   ) +
   theme_minimal() +
   theme(
@@ -186,98 +192,102 @@ map_total_abs_error <- ggplot(map_sf) +
     plot.title = element_text(face = "bold")
   )
 
+map_pct_change
 
 
 #----- mapa 3: proporcion del error absoluto atribuible a errores positivos -----
-
-map_positive_error_magnitude <- ggplot(map_sf) +
-  geom_sf(
-    aes(fill = positive_error_share),
-    color = "white",
-    linewidth = 0.2
-  ) +
-  scale_fill_viridis_c(
-    option = "viridis",
-    limits = c(0, 100),
-    na.value = "grey90",
-    name = "Share of absolute error (%)",
-    labels = scales::label_number(accuracy = 1)
-  ) +
-  coord_sf(
-    xlim = c(-25, 45),
-    ylim = c(30, 72),
-    expand = FALSE
-  ) +
-  labs(
-    title = "Contribution of positive errors to total absolute error",
-    subtitle = "GCAM-Europe hindcasting",
-    caption = "Percentage of the total absolute error attributable to positive errors."
-  ) +
-  theme_minimal() +
-  theme(
-    panel.grid = element_blank(),
-    axis.title = element_blank(),
-    axis.text = element_blank(),
-    axis.ticks = element_blank(),
-    plot.title = element_text(face = "bold")
-  )
-
+#
+# map_positive_error_magnitude <- ggplot(map_sf) +
+#   geom_sf(
+#     aes(fill = positive_error_share),
+#     color = "white",
+#     linewidth = 0.2
+#   ) +
+#   scale_fill_viridis_c(
+#     option = "viridis",
+#     limits = c(0, 100),
+#     na.value = "grey90",
+#     name = "Share of absolute error (%)",
+#     labels = scales::label_number(accuracy = 1)
+#   ) +
+#   coord_sf(
+#     xlim = c(-25, 45),
+#     ylim = c(30, 72),
+#     expand = FALSE
+#   ) +
+#   labs(
+#     title = "Contribution of positive errors to total absolute error",
+#     subtitle = "GCAM-Europe hindcasting",
+#     caption = "Percentage of the total absolute error attributable to positive errors."
+#   ) +
+#   theme_minimal() +
+#   theme(
+#     panel.grid = element_blank(),
+#     axis.title = element_blank(),
+#     axis.text = element_blank(),
+#     axis.ticks = element_blank(),
+#     plot.title = element_text(face = "bold")
+#   )
+#
 
 #----- mapa 4: proporcion de errores positivos por numero de observaciones -----
-
-map_positive_error_frequency <- ggplot(map_sf) +
-  geom_sf(
-    aes(fill = pct_positive),
-    color = "white",
-    linewidth = 0.2
-  ) +
-  scale_fill_viridis_c(
-    option = "viridis",
-    limits = c(0, 100),
-    na.value = "grey90",
-    name = "Positive errors (%)",
-    labels = scales::label_number(accuracy = 1)
-  ) +
-  coord_sf(
-    xlim = c(-25, 45),
-    ylim = c(30, 72),
-    expand = FALSE
-  ) +
-  labs(
-    title = "Frequency of positive errors",
-    subtitle = "GCAM-Europe hindcasting",
-    caption = "Percentage of observations with a positive relative error."
-  ) +
-  theme_minimal() +
-  theme(
-    panel.grid = element_blank(),
-    axis.title = element_blank(),
-    axis.text = element_blank(),
-    axis.ticks = element_blank(),
-    plot.title = element_text(face = "bold")
-  )
-
-
-#----- mostrar mapas -----
-
-print(map_positive_error_magnitude)
-print(map_positive_error_frequency)
+#
+# map_positive_error_frequency <- ggplot(map_sf) +
+#   geom_sf(
+#     aes(fill = pct_positive),
+#     color = "white",
+#     linewidth = 0.2
+#   ) +
+#   scale_fill_viridis_c(
+#     option = "viridis",
+#     limits = c(0, 100),
+#     na.value = "grey90",
+#     name = "Positive errors (%)",
+#     labels = scales::label_number(accuracy = 1)
+#   ) +
+#   coord_sf(
+#     xlim = c(-25, 45),
+#     ylim = c(30, 72),
+#     expand = FALSE
+#   ) +
+#   labs(
+#     title = "Frequency of positive errors",
+#     subtitle = "GCAM-Europe hindcasting",
+#     caption = "Percentage of observations with a positive relative error."
+#   ) +
+#   theme_minimal() +
+#   theme(
+#     panel.grid = element_blank(),
+#     axis.title = element_blank(),
+#     axis.text = element_blank(),
+#     axis.ticks = element_blank(),
+#     plot.title = element_text(face = "bold")
+#   )
+#
 
 #----- mostrar mapas -----
 
-print(map_MAE)
-print(map_total_abs_error)
+# print(map_positive_error_magnitude)
+# print(map_positive_error_frequency)
+
+#----- mostrar mapas -----
+
+# print(map_MAE)
+# print(map_total_abs_error)
 ggsave("Figures/map_MAE.png", map_MAE,
        width = 10, height = 8, dpi = 300)
+#
+# ggsave("Figures/map_total_abs_error.png", map_total_abs_error,
+#        width = 10, height = 8, dpi = 300)
 
-ggsave("Figures/map_total_abs_error.png", map_total_abs_error,
-       width = 10, height = 8, dpi = 300)
 
+# ggsave("Figures/map_positive_error_frequency.png", map_positive_error_frequency,
+#        width = 10, height = 8, dpi = 300)
+#
+# ggsave("Figures/map_positive_error_magnitude.png", map_positive_error_magnitude,
+#        width = 10, height = 8, dpi = 300)
 
-ggsave("Figures/map_positive_error_frequency.png", map_positive_error_frequency,
-       width = 10, height = 8, dpi = 300)
-
-ggsave("Figures/map_positive_error_magnitude.png", map_positive_error_magnitude,
+ggsave("Figures/map_pct_change.png", map_pct_change,
        width = 10, height = 8, dpi = 300)
 
 #################### By sector ####################
@@ -477,7 +487,7 @@ map_dominant_sector <- ggplot(map_sector_sf) +
     expand = FALSE
   ) +
   labs(
-    title = "Sector with the highest MAE by GCAM region",
+    title = "Sector with the highest MAE by region",
     subtitle = "GCAM-Europe hindcasting",
     caption = "Each region is assigned the sector with the highest mean absolute error."
   ) +
@@ -572,7 +582,7 @@ map_dominant_technology <- ggplot(map_technology_sf) +
     expand = FALSE
   ) +
   labs(
-    title = "Technology with the highest MAE by GCAM region",
+    title = "Technology with the highest MAE by region",
     subtitle = "GCAM-Europe hindcasting",
     caption = "Each region is assigned the technology with the highest mean absolute error."
   ) +

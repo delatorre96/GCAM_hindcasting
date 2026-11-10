@@ -66,10 +66,14 @@ calculate_error_by_dim <- function(df, dim){
       rel_error = if_else(rel_error > 0, 1, -1),
       increase_error = (value_chY - value_ref) / value_ref
     ) %>%
-    group_by(across(all_of(dim))) %>%
+    group_by(across(all_of(dim)))  %>%
+    mutate(
+      total_value_ref = sum(value_ref, na.rm = TRUE),
+      share_value_ref = value_ref / total_value_ref
+    ) %>%
     summarise(
       total_abs_error = sum(abs_error, na.rm = TRUE),
-      pct_ch_mean = mean(pct_ch, na.rm = TRUE),
+      abs_pct_ch_mean = mean(abs_pct_ch, na.rm = TRUE),
       net_pct_ch_mean = mean(net_pct_ch, na.rm = TRUE),
       MAE = mean(abs_error, na.rm = TRUE),
       RMSE = sqrt(mean(error^2, na.rm = TRUE)),
@@ -89,7 +93,7 @@ calculate_error_by_dim <- function(df, dim){
       ),
 
       pct_positive = mean(rel_error == 1, na.rm = TRUE) * 100,
-      pct_negative = mean(rel_error == -1, na.rm = TRUE) * 100,
+      weighted_abs_pct_ch_mean = mean(abs_pct_ch * share_value_ref, na.rm = TRUE),
 
       .groups = "drop"
     ) %>%
@@ -120,9 +124,9 @@ all_errors_by_technology <- calculate_error_by_dim (all_errors, dim = 'technolog
 all_errors_by_technology %>%
   write.csv('Data/errors_by_technology.csv', row.names = FALSE)
 
-all_errors_by_regiontechnology <- calculate_error_by_dim (all_errors, dim = c('region', 'technology'))
-all_errors_by_regiontechnology %>%
-  write.csv('Data/errors_by_region_technology.csv', row.names = FALSE)
+all_errors_by_seectorsubsector <- calculate_error_by_dim (all_errors, dim = c('sector', 'subsector'))
+all_errors_by_seectorsubsector %>%
+  write.csv('Data/errors_by_sector_subsector.csv', row.names = FALSE)
 
 all_errors_by_regionsector <- calculate_error_by_dim (all_errors, dim = c('region', 'sector'))
 all_errors_by_regionsector %>%
@@ -131,3 +135,6 @@ all_errors_by_regionsector %>%
 
 
 
+all_errors_by_regiontechnology <- calculate_error_by_dim (all_errors, dim = c('region', 'technology'))
+all_errors_by_regiontechnology %>%
+  write.csv('Data/errors_by_region_technology.csv', row.names = FALSE)
