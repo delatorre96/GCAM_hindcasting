@@ -180,7 +180,7 @@ map_pct_change <- ggplot(map_sf_withoutSomeRegions) +
     expand = FALSE
   ) +
   labs(
-    title = "Weighted Mean Absolute Percentage Change by GCAM region",
+    title = "Weighted Mean Absolute Percentage Change by region",
     subtitle = "GCAM-Europe hindcasting | Weights based on reference values"
   ) +
   theme_minimal() +
